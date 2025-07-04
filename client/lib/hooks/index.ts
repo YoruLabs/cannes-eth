@@ -1,0 +1,1 @@
+export { useDatabaseFetch, type UseDatabaseFetchConfig } from './use-database-fetch';

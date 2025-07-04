@@ -1,0 +1,10 @@
+# Ignore dependencies
+node_modules
+
+# Ignore Next.js build outputs
+.next
+out
+
+# Ignore other common build or distribution directories
+build
+dist
