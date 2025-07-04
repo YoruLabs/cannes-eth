@@ -29,14 +29,11 @@ const MOCK_USER_DATA = {
   wallet_address: "0x6b84bba6e67a124093933aba8f5b6beb96307d99",
   username: "mrbry.0675",
   world_id:
-    "0x2997d55489ce365dc39f9eeac6451eb3932530c1e068a11a421c4405204b1585",
+    "0x1f7ea7470188cf8ffc728dcfc0d37da45dbb4cba03343f9bc259decb24051926",
   nullifier_hash:
-    "0x2997d55489ce365dc39f9eeac6451eb3932530c1e068a11a421c4405204b1585",
+    "0x1f7ea7470188cf8ffc728dcfc0d37da45dbb4cba03343f9bc259decb24051926",
   verification_level: "orb",
-  is_verified: true,
-  native_language: "en",
-  active_learning_language: "fr",
-  points: 0,
+  is_verified: true
 };
 
 // Generate random wallet address for testing
@@ -76,11 +73,11 @@ export default function LoginPage() {
 
   const { user, login } = useUser();
 
-  const isTestMode = process.env.NEXT_PUBLIC_APP_MODE === "test";
+  const isTestMode = process.env.NEXT_PUBLIC_APP_ENV === "test";
 
   // Debug logging
   console.log("isTestMode", isTestMode);
-  console.log("NEXT_PUBLIC_APP_MODE", process.env.NEXT_PUBLIC_APP_MODE);
+  console.log("NEXT_PUBLIC_APP_MODE", process.env.NEXT_PUBLIC_APP_ENV);
   console.log("NODE_ENV", process.env.NODE_ENV);
 
   /* --------------------------------------------------
