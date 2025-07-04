@@ -70,8 +70,8 @@ class WebhookHandler {
             // Store in Supabase
             const storedData = await this.supabaseService.storeSleepMetrics(finalMetrics);
             
-            // Update user record
-            await this.supabaseService.upsertUser(validatedPayload.user);
+                      // Update connection record
+          await this.supabaseService.upsertConnection(validatedPayload.user);
 
             results.push({
               sessionId: processedMetrics.session_id,
@@ -180,6 +180,8 @@ class WebhookHandler {
       });
     }
   }
+
+
 
   /**
    * Get sleep leaderboard endpoint

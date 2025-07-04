@@ -39,8 +39,8 @@ LOG_LEVEL=info
 Run these SQL commands in your Supabase SQL editor:
 
 ```sql
--- Users table
-CREATE TABLE users (
+-- Connections table
+CREATE TABLE connections (
   id UUID PRIMARY KEY,
   provider TEXT NOT NULL,
   reference_id TEXT,
@@ -84,7 +84,7 @@ CREATE TABLE sleep_metrics (
 );
 
 -- Indexes for performance
-CREATE INDEX idx_sleep_metrics_user_id ON sleep_metrics(user_id);
+CREATE INDEX idx_connections_user_id ON sleep_metrics(user_id);
 CREATE INDEX idx_sleep_metrics_created_at ON sleep_metrics(created_at);
 CREATE INDEX idx_sleep_metrics_session_id ON sleep_metrics(session_id);
 ```

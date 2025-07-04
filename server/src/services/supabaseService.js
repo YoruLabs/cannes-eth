@@ -159,26 +159,26 @@ class SupabaseService {
   }
 
   /**
-   * Check if user exists in the system
-   * @param {string} userId - User ID
-   * @returns {boolean} Whether user exists
+   * Check if connection exists in the system
+   * @param {string} userId - Terra User ID
+   * @returns {boolean} Whether connection exists
    */
-  async userExists(userId) {
+  async connectionExists(userId) {
     try {
       const { data, error } = await this.supabase
-        .from('users')
+        .from('connections')
         .select('id')
         .eq('id', userId)
         .single();
 
       if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
-        logger.error('Error checking if user exists', { error });
-        throw new Error(`Failed to check user existence: ${error.message}`);
+        logger.error('Error checking if connection exists', { error });
+        throw new Error(`Failed to check connection existence: ${error.message}`);
       }
 
       return !!data;
     } catch (error) {
-      logger.error('Error in userExists', { 
+      logger.error('Error in connectionExists', { 
         error: error.message,
         stack: error.stack 
       });
@@ -187,16 +187,16 @@ class SupabaseService {
   }
 
   /**
-   * Create or update user record
+   * Create or update connection record
    * @param {Object} userData - User data from Terra
-   * @returns {Object} User record
+   * @returns {Object} Connection record
    */
-  async upsertUser(userData) {
+  async upsertConnection(userData) {
     try {
-      logger.info('Upserting user record', { userId: userData.user_id });
+      logger.info('Upserting connection record', { userId: userData.user_id });
 
       const { data, error } = await this.supabase
-        .from('users')
+        .from('connections')
         .upsert([{
           id: userData.user_id,
           provider: userData.provider,
@@ -210,15 +210,126 @@ class SupabaseService {
         .single();
 
       if (error) {
-        logger.error('Error upserting user', { error });
-        throw new Error(`Failed to upsert user: ${error.message}`);
+        logger.error('Error upserting connection', { error });
+        throw new Error(`Failed to upsert connection: ${error.message}`);
       }
 
-      logger.info('Successfully upserted user', { userId: data.id });
+      logger.info('Successfully upserted connection', { userId: data.id });
 
       return data;
     } catch (error) {
-      logger.error('Error in upsertUser', { 
+      logger.error('Error in upsertConnection', { 
+        error: error.message,
+        stack: error.stack 
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Get connection by Terra user ID
+   * @param {string} userId - Terra User ID
+   * @returns {Object} Connection record
+   */
+  async getConnectionByUserId(userId) {
+    try {
+      const { data, error } = await this.supabase
+        .from('connections')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        logger.error('Error fetching connection by user ID', { error });
+        throw new Error(`Failed to fetch connection: ${error.message}`);
+      }
+
+      return data;
+    } catch (error) {
+      logger.error('Error in getConnectionByUserId', { 
+        error: error.message,
+        stack: error.stack 
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Get all connections for a wallet address (reference_id)
+   * @param {string} walletAddress - Wallet address from World miniapp
+   * @returns {Array} Connection records
+   */
+  async getConnectionsByWalletAddress(walletAddress) {
+    try {
+      logger.info('Fetching connections for wallet address', { walletAddress });
+
+      const { data, error } = await this.supabase
+        .from('connections')
+        .select('*')
+        .eq('reference_id', walletAddress)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        logger.error('Error fetching connections by wallet address', { error });
+        throw new Error(`Failed to fetch connections: ${error.message}`);
+      }
+
+      logger.info('Successfully fetched connections', { 
+        walletAddress, 
+        count: data.length 
+      });
+
+      return data;
+    } catch (error) {
+      logger.error('Error in getConnectionsByWalletAddress', { 
+        error: error.message,
+        stack: error.stack 
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Get connection by wallet address and provider
+   * @param {string} walletAddress - Wallet address from World miniapp
+   * @param {string} provider - Provider name (OURA, WHOOP, etc.)
+   * @returns {Object|null} Connection record or null if not found
+   */
+  async getConnectionByWalletAndProvider(walletAddress, provider) {
+    try {
+      logger.info('Fetching connection by wallet and provider', { 
+        walletAddress, 
+        provider 
+      });
+
+      const { data, error } = await this.supabase
+        .from('connections')
+        .select('*')
+        .eq('reference_id', walletAddress)
+        .eq('provider', provider)
+        .single();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
+        logger.error('Error fetching connection by wallet and provider', { error });
+        throw new Error(`Failed to fetch connection: ${error.message}`);
+      }
+
+      if (data) {
+        logger.info('Successfully fetched connection', { 
+          walletAddress, 
+          provider, 
+          connectionId: data.id 
+        });
+      } else {
+        logger.info('No connection found for wallet and provider', { 
+          walletAddress, 
+          provider 
+        });
+      }
+
+      return data;
+    } catch (error) {
+      logger.error('Error in getConnectionByWalletAndProvider', { 
         error: error.message,
         stack: error.stack 
       });
