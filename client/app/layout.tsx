@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, DM_Mono, Alex_Brush, Silkscreen } from "next/font/google";
 import "@/assets/css/globals.css";
 import { AppProviders } from "@/providers";
+import GlobalLayout from "@/components/layouts/GlobalLayout";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -14,16 +15,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Datagotchi",
-  description: "Datagotchi",
+  title: "Livus",
+  description: "Livus",
 };
-
-export const viewport: Viewport = {
-  width: 'device-width',
-  initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
-}
 
 const dmMono = DM_Mono({
   weight: ["400"],
@@ -43,6 +37,13 @@ const silkscreen = Silkscreen({
   variable: "--font-silkscreen", // Custom CSS variable
 });
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -53,7 +54,9 @@ export default function RootLayout({
       <body
         className={`bg-white text-gray-900 antialiased w-full min-h-screen overflow-x-hidden`}
       >
-        <AppProviders>{children}</AppProviders>
+        <AppProviders>
+          <GlobalLayout>{children}</GlobalLayout>
+        </AppProviders>
       </body>
     </html>
   );

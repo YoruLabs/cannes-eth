@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, usePathname } from "next/navigation";
-import { House, BookOpen, User } from "phosphor-react";
+import { House, LinkSimple, User } from "phosphor-react";
 
 interface NavItem {
   icon: React.ComponentType<any>;
@@ -22,10 +22,10 @@ export default function NavBar({
 
   const navItems: NavItem[] = [
     {
-      icon: BookOpen,
-      label: "Lessons",
-      path: "/lessons",
-      isActive: pathname === "/lessons",
+      icon: LinkSimple,
+      label: "Connect",
+      path: "/connect",
+      isActive: pathname === "/connect",
     },
     {
       icon: House,
@@ -63,8 +63,8 @@ export default function NavBar({
                 className={`relative flex items-center justify-center w-12 h-12 rounded-full transition-all
                 duration-300 ease-out transform hover:scale-110 active:scale-95 ${
                 item.isActive
-                    ? "bg-ailingo-500 text-white shadow-lg shadow-ailingo-500/30"
-                    : "text-gray-500 hover:text-ailingo-600 hover:bg-ailingo-50"
+                    ? "bg-gray-500 text-white shadow-lg shadow-gray-500/30"
+                    : "text-gray-500 hover:text-gray-600 hover:bg-gray-50"
                 }`}
               >
                 <Icon

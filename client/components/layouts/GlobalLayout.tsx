@@ -9,7 +9,7 @@ interface GlobalLayoutProps {
 }
 
 // Pages that should show the bottom navigation
-const AUTHENTICATED_PAGES = ["/", "/lessons", "/profile"];
+const AUTHENTICATED_PAGES = ["/", "/connect", "/profile"];
 
 export default function GlobalLayout({ children }: GlobalLayoutProps) {
   const { user, isLoading } = useUser();
@@ -20,7 +20,7 @@ export default function GlobalLayout({ children }: GlobalLayoutProps) {
     user &&
     user.is_verified &&
     (AUTHENTICATED_PAGES.includes(pathname) ||
-      pathname.startsWith("/lessons/"));
+      pathname.startsWith("/connect/"));
 
   return (
     <div className="relative w-full min-h-screen">
