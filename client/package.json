@@ -9,6 +9,9 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@graphprotocol/grc-20": "^0.21.3",
+    "@graphprotocol/hypergraph": "0.0.12",
+    "@graphprotocol/hypergraph-react": "0.0.12",
     "@radix-ui/react-accordion": "^1.2.11",
     "@radix-ui/react-alert-dialog": "^1.1.14",
     "@radix-ui/react-avatar": "^1.1.10",
@@ -26,6 +29,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "dotenv": "^16.5.0",
+    "effect": "^3.16.10",
     "eruda": "^3.4.1",
     "input-otp": "^1.4.2",
     "lucide-react": "^0.511.0",
