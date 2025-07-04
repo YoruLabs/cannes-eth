@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, usePathname } from "next/navigation";
-import { House, LinkSimple, User } from "phosphor-react";
+import { House, LinkSimple, User, Graph } from "phosphor-react";
 
 interface NavItem {
   icon: React.ComponentType<any>;
@@ -21,6 +21,12 @@ export default function NavBar({
   const pathname = usePathname();
 
   const navItems: NavItem[] = [
+    {
+      icon: Graph,
+      label: "HyperGraph",
+      path: "/hypergraph",
+      isActive: pathname === "/hypergraph",
+    },
     {
       icon: LinkSimple,
       label: "Connect",
