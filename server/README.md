@@ -68,10 +68,10 @@ A Fastify-based server for handling Terra sleep data webhooks and processing hea
 
 Create the following tables in your Supabase database:
 
-### Users Table
+### Connections Table
 
 ```sql
-CREATE TABLE users (
+CREATE TABLE connections (
   id UUID PRIMARY KEY,
   provider TEXT NOT NULL,
   reference_id TEXT,
@@ -118,7 +118,7 @@ CREATE TABLE sleep_metrics (
 );
 
 -- Create indexes for better performance
-CREATE INDEX idx_sleep_metrics_user_id ON sleep_metrics(user_id);
+CREATE INDEX idx_connections_user_id ON sleep_metrics(user_id);
 CREATE INDEX idx_sleep_metrics_created_at ON sleep_metrics(created_at);
 CREATE INDEX idx_sleep_metrics_session_id ON sleep_metrics(session_id);
 ```

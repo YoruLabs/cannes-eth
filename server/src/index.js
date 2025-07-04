@@ -40,6 +40,8 @@ server.register(async function (fastify, opts) {
     return await webhookHandler.getUserMetrics(request, reply);
   });
 
+
+
   // Leaderboard endpoint
   fastify.get('/leaderboard', async (request, reply) => {
     return await webhookHandler.getLeaderboard(request, reply);
