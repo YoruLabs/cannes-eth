@@ -1,44 +1,200 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Wallet, Loader2, Shield } from "lucide-react";
+import { ArrowRightIcon, Globe } from "lucide-react";
+import { LockKeyOpen, CircleNotch } from "phosphor-react";
 import { useRouter } from "next/navigation";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
-import { MiniKit, ISuccessResult, VerificationLevel } from "@worldcoin/minikit-js";
+import { MiniKit } from "@worldcoin/minikit-js";
 import { useUser } from "@/providers/user-provider";
 import { cn } from "@/lib/utils";
+import MobileScreen from "@/components/layouts/MobileScreen";
+import { AnimatedShinyText } from "@/components/magicui/animated-shiny-text";
+import { FlickeringGrid } from "@/components/magicui/flickering-grid";
+
+/**
+ * Refreshed Login / On-Ramp page for AILingo
+ * --------------------------------------------------
+ * Design tweaks inspired by the provided mock-up:
+ *  • Brand chip pinned to the top-left corner (glassmorphism)
+ *  • Softer teal-centric gradient background
+ *  • Subtle glowing blob in the top-right corner for depth
+ *  • Tighter, clearer hierarchy in hero + CTA
+ *  • Dark-mode aware
+ */
+
+// Mock user data for test environment
+const MOCK_USER_DATA = {
+  wallet_address: "0x6b84bba6e67a124093933aba8f5b6beb96307d99",
+  username: "mrbry.0675",
+  world_id:
+    "0x2997d55489ce365dc39f9eeac6451eb3932530c1e068a11a421c4405204b1585",
+  nullifier_hash:
+    "0x2997d55489ce365dc39f9eeac6451eb3932530c1e068a11a421c4405204b1585",
+  verification_level: "orb",
+  is_verified: true,
+  native_language: "en",
+  active_learning_language: "fr",
+  points: 0,
+};
+
+// Generate random wallet address for testing
+const generateRandomWallet = () => {
+  const chars = "0123456789abcdef";
+  let result = "0x";
+  for (let i = 0; i < 40; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+};
+
+// Mock data for new unverified user (for onboarding testing)
+const generateMockOnboardingUser = () => ({
+  wallet_address: generateRandomWallet(),
+  username: `testuser.${Math.floor(Math.random() * 10000)
+    .toString()
+    .padStart(4, "0")}`,
+  world_id: undefined, // Not verified yet
+  nullifier_hash: undefined, // Not verified yet
+  verification_level: undefined, // Not verified yet
+  is_verified: false, // Key: this user needs onboarding
+  native_language: undefined, // Will be set during onboarding
+  active_learning_language: undefined, // Will be set during onboarding
+  points: 0,
+});
 
 export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [authLoading, setAuthLoading] = useState(false);
-  const [verifyLoading, setVerifyLoading] = useState(false);
+  const [onboardingLoading, setOnboardingLoading] = useState(false);
+  const [windowDimensions, setWindowDimensions] = useState({
+    width: 375, // fallback mobile width
+    height: 812, // fallback mobile height
+  });
   const router = useRouter();
-  
+
   const { user, login } = useUser();
 
-  // Redirect if already authenticated
+  const isTestMode = process.env.NEXT_PUBLIC_APP_MODE === "test";
+
+  // Debug logging
+  console.log("isTestMode", isTestMode);
+  console.log("NEXT_PUBLIC_APP_MODE", process.env.NEXT_PUBLIC_APP_MODE);
+  console.log("NODE_ENV", process.env.NODE_ENV);
+
+  /* --------------------------------------------------
+   * Set window dimensions safely
+   * -------------------------------------------------- */
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setWindowDimensions({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      });
+
+      const handleResize = () => {
+        setWindowDimensions({
+          width: window.innerWidth,
+          height: window.innerHeight,
+        });
+      };
+
+      window.addEventListener("resize", handleResize);
+      return () => window.removeEventListener("resize", handleResize);
+    }
+  }, []);
+
+  /* --------------------------------------------------
+   * Redirect once authenticated
+   * -------------------------------------------------- */
   useEffect(() => {
     if (user) {
-      router.push('/');
+      router.push("/");
     }
   }, [user, router]);
 
-  // Check MiniKit installation
+  /* --------------------------------------------------
+   * Poll for World App / MiniKit installation (skip in test mode)
+   * -------------------------------------------------- */
   useEffect(() => {
+    console.log("isTestMode", isTestMode);
+    console.log("env", process.env.NODE_ENV);
+    if (isTestMode) {
+      setIsLoading(false);
+
+      console.log("Test mode -> MiniKit initialization skipped on provider");
+
+      return;
+    }
+
     const checkMiniKit = async () => {
-      const isInstalled = MiniKit.isInstalled();
-      if (isInstalled) {
+      if (MiniKit.isInstalled()) {
         setIsLoading(false);
       } else {
         setTimeout(checkMiniKit, 1000);
       }
     };
-
     checkMiniKit();
-  }, []);
+  }, [isTestMode]);
 
-  // Handle World wallet authentication
+  /* --------------------------------------------------
+   * Handle test authentication (bypass World App)
+   * -------------------------------------------------- */
+  const handleTestLogin = async () => {
+    setAuthLoading(true);
+
+    try {
+      const userData = await login(
+        MOCK_USER_DATA.wallet_address,
+        MOCK_USER_DATA.username,
+        {
+          world_id: MOCK_USER_DATA.world_id,
+          nullifier_hash: MOCK_USER_DATA.nullifier_hash,
+          verification_level: MOCK_USER_DATA.verification_level,
+          is_verified: MOCK_USER_DATA.is_verified,
+        }
+      );
+
+      toast.success(`Welcome back, ${MOCK_USER_DATA.username}!`);
+      setTimeout(() => router.push("/"), 300);
+    } catch (err) {
+      console.error("Test authentication error:", err);
+      toast.error("Test authentication failed");
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  /* --------------------------------------------------
+   * Handle test onboarding (new unverified user)
+   * -------------------------------------------------- */
+  const handleTestOnboarding = async () => {
+    setOnboardingLoading(true);
+
+    try {
+      const mockUser = generateMockOnboardingUser();
+
+      const userData = await login(mockUser.wallet_address, mockUser.username, {
+        world_id: mockUser.world_id,
+        nullifier_hash: mockUser.nullifier_hash,
+        verification_level: mockUser.verification_level,
+        is_verified: mockUser.is_verified,
+      });
+
+      toast.success(`New user created: ${mockUser.username}`);
+      setTimeout(() => router.push("/onboarding"), 300);
+    } catch (err) {
+      console.error("Test onboarding error:", err);
+      toast.error("Onboarding setup failed");
+    } finally {
+      setOnboardingLoading(false);
+    }
+  };
+
+  /* --------------------------------------------------
+   * Handle SIWE-style wallet auth via MiniKit
+   * -------------------------------------------------- */
   const handleConnectWallet = async () => {
     setAuthLoading(true);
 
@@ -48,17 +204,17 @@ export default function LoginPage() {
         return;
       }
 
-      // Get nonce from backend
+      // 1️⃣  Get nonce from backend
       const res = await fetch("/api/nonce");
       const { nonce } = await res.json();
-      
-      // Perform wallet authentication
-      const { commandPayload, finalPayload } = await MiniKit.commandsAsync.walletAuth({
-        nonce: nonce,
+
+      // 2️⃣  Ask wallet to sign-in
+      const { finalPayload } = await MiniKit.commandsAsync.walletAuth({
+        nonce,
         requestId: "0",
-        expirationTime: new Date(new Date().getTime() + 7 * 24 * 60 * 60 * 1000),
-        notBefore: new Date(new Date().getTime() - 24 * 60 * 60 * 1000),
-        statement: "Sign in to Ailingo",
+        expirationTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        notBefore: new Date(Date.now() - 24 * 60 * 60 * 1000),
+        statement: "Sign in to AILingo",
       });
 
       if (finalPayload.status === "error") {
@@ -66,320 +222,237 @@ export default function LoginPage() {
         return;
       }
 
-      // Verify the authentication with backend
-      const response = await fetch("/api/complete-siwe", {
+      // 3️⃣  Verify signature server-side
+      const verifyRes = await fetch("/api/complete-siwe", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          payload: finalPayload,
-          nonce,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ payload: finalPayload, nonce }),
       });
 
-      const result = await response.json();
+      const result = await verifyRes.json();
 
       if (result.status === "success" && result.isValid) {
-        // Get user info from MiniKit and payload
-        const username = MiniKit.user?.username;
+        const username = MiniKit.user?.username ?? "";
         const walletAddress = finalPayload.address;
 
-        // Use the provider's login function to save to Supabase
-        await login(walletAddress, username);
-        
-        toast.success(`Welcome ${username || "User"}! 🎉`);
-        
-        // Redirect to main page
-        router.push('/');
+        const userData = await login(walletAddress, username);
+
+        const welcome = userData.is_verified
+          ? `Welcome back, ${username || "User"}!`
+          : `Welcome, ${username || "User"}!`;
+
+        toast.success(welcome);
+        setTimeout(
+          () => router.push(userData.is_verified ? "/" : "/onboarding"),
+          300
+        );
       } else {
-        toast.error("Authentication verification failed");
+        toast.error("Authentication failed");
       }
-    } catch (error: any) {
-      console.error("Auth error:", error);
+    } catch (err) {
+      console.error("Auth error:", err);
       toast.error("Authentication failed");
     } finally {
       setAuthLoading(false);
     }
   };
 
-  // Handle World ID verification
-  const handleWorldIdVerify = async () => {
-    setVerifyLoading(true);
-
-    try {
-      if (!MiniKit.isInstalled()) {
-        toast.error("MiniKit is not installed");
-        return;
-      }
-
-      console.log("Starting World ID verification...");
-
-      // Check if required environment variables are set
-      const actionName = process.env.NEXT_PUBLIC_WLD_ACTION_NAME;
-      if (!actionName) {
-        toast.error("Action name not configured. Please set NEXT_PUBLIC_WLD_ACTION_NAME in your environment variables.");
-        console.error("NEXT_PUBLIC_WLD_ACTION_NAME is not set");
-        return;
-      }
-
-      console.log("Using action:", actionName);
-
-      // First get the payload from World ID verification
-      const { finalPayload } = await MiniKit.commandsAsync.verify({
-        action: actionName,
-        signal: "", // Optional signal - can be used for additional context
-        verification_level: VerificationLevel.Orb, // Use enum instead of string
-      });
-
-      console.log("World ID verification response:", finalPayload);
-
-      if (finalPayload.status === "error") {
-        console.error("World ID verification error:", finalPayload);
-        
-        // Handle specific error codes according to World documentation
-        switch (finalPayload.error_code) {
-          case "verification_rejected":
-            toast.error("Verification was rejected. Please try again if this was a mistake.");
-            break;
-          case "max_verifications_reached":
-            toast.error("You have already verified for this action the maximum number of times.");
-            break;
-          case "credential_unavailable":
-            toast.error("You need to verify at an Orb or verify your device in World App first.");
-            break;
-          case "invalid_network":
-            toast.error("Network mismatch. Make sure you're using the correct environment.");
-            break;
-          case "malformed_request":
-            toast.error("Invalid request. Please check the configuration.");
-            break;
-          case "inclusion_proof_failed":
-            toast.error("Network issue. Please try again.");
-            break;
-          case "inclusion_proof_pending":
-            toast.error("Your credential is not available on-chain yet. Please try again in about an hour.");
-            break;
-          default:
-            toast.error(`World ID verification failed: ${finalPayload.error_code || 'Unknown error'}`);
-        }
-        return;
-      }
-
-      console.log("World ID verification successful, verifying proof with backend...");
-
-      // Verify the proof with our backend
-      const verifyResponse = await fetch("/api/verify", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          payload: finalPayload,
-          action: actionName,
-          signal: "",
-        }),
-      });
-
-      const verifyResult = await verifyResponse.json();
-      console.log("Backend verification result:", verifyResult);
-
-      if (!verifyResponse.ok || !verifyResult.success) {
-        console.error("Backend verification failed:", verifyResult);
-        
-        // Handle backend verification errors
-        if (verifyResult.verifyRes && !verifyResult.verifyRes.success) {
-          const backendError = verifyResult.verifyRes.detail;
-          console.error("Backend error detail:", backendError);
-          
-          if (backendError.includes("already verified")) {
-            toast.error("You have already verified for this action.");
-          } else if (backendError.includes("invalid_proof")) {
-            toast.error("Invalid proof. Please try again.");
-          } else if (backendError.includes("invalid_merkle_root")) {
-            toast.error("Stale proof. Please generate a new proof.");
-          } else {
-            toast.error(`Verification failed: ${backendError}`);
-          }
-        } else {
-          toast.error("Backend verification failed. Please try again.");
-        }
-        return;
-      }
-
-      console.log("Proof verified successfully, getting wallet authentication...");
-
-      // Now get wallet auth for address
-      const { finalPayload: walletPayload } = await MiniKit.commandsAsync.walletAuth({
-        nonce: crypto.randomUUID(),
-        requestId: "1",
-        expirationTime: new Date(new Date().getTime() + 7 * 24 * 60 * 60 * 1000),
-        notBefore: new Date(new Date().getTime() - 24 * 60 * 60 * 1000),
-        statement: "Complete World ID verification for Ailingo",
-      });
-
-      console.log("Wallet auth response:", walletPayload);
-
-      if (walletPayload.status === "error") {
-        console.error("Wallet authentication error:", walletPayload);
-        toast.error("Wallet authentication failed");
-        return;
-      }
-
-      // Get user info
-      const username = MiniKit.user?.username;
-      const walletAddress = walletPayload.address;
-
-      console.log("Creating user session with World ID data...", {
-        walletAddress,
-        username,
-        worldIdData: {
-          world_id: finalPayload.nullifier_hash,
-          nullifier_hash: finalPayload.nullifier_hash,
-          verification_level: finalPayload.verification_level || "orb",
-          is_verified: true,
-        }
-      });
-
-      // Save to Supabase with World ID data
-      await login(walletAddress, username, {
-        world_id: finalPayload.nullifier_hash, // Using nullifier as World ID
-        nullifier_hash: finalPayload.nullifier_hash,
-        verification_level: finalPayload.verification_level || "orb",
-        is_verified: true,
-      });
-
-      toast.success(`Welcome ${username || "User"}! You are now verified with World ID! ✅`);
-      router.push('/');
-    } catch (error: any) {
-      console.error("World ID verification error:", error);
-      
-      // Check if it's a network error
-      if (error.message && error.message.includes("fetch")) {
-        toast.error("Network error. Please check your connection and try again.");
-      } else if (error.message && error.message.includes("timeout")) {
-        toast.error("Request timed out. Please try again.");
-      } else {
-        toast.error(`World ID verification failed: ${error.message || 'Unknown error'}`);
-      }
-    } finally {
-      setVerifyLoading(false);
-    }
-  };
-
-  if (isLoading) {
+  /* --------------------------------------------------
+   * Loading skeleton while waiting for MiniKit (skip in test mode)
+   * -------------------------------------------------- */
+  if (isLoading && !isTestMode) {
     return (
-      <main className="h-[100dvh] w-full relative overflow-hidden bg-gradient-to-br from-purple-600 to-blue-700">
-        <div className="relative z-10 flex flex-col items-center justify-center h-full text-center">
-          <div className="mb-6 relative">
-            <div className="w-16 h-16 bg-white border-4 border-gray-800 shadow-lg animate-pulse rounded-lg">
-              <div className="w-full h-full bg-gradient-to-br from-purple-400 to-blue-500 rounded"></div>
-            </div>
+      <MobileScreen
+        className="flex flex-col items-center justify-center bg-gradient-to-br from-gray-100
+          via-gray-200 to-gray-300 rounded-[32px] overflow-hidden"
+      >
+        {/*  Blurred decorative blob  */}
+        <div
+          className="absolute -top-20 -left-20 w-72 h-72 bg-gray-300 opacity-30 rounded-full
+            blur-[100px]"
+        />
+
+        <div className="relative z-10 flex flex-col items-center space-y-6">
+          {/*  Brand chip  */}
+          <div
+            className="bg-white/40 backdrop-blur-lg rounded-3xl px-4 py-2 flex items-center gap-2
+              shadow-lg"
+          >
+            <Globe className="w-5 h-5 text-gray-500" />
+            <span className="font-bold text-gray-700 tracking-wide">
+              Livus
+            </span>
           </div>
-          <div className="text-xl font-bold text-white uppercase tracking-wider drop-shadow-lg">
-            Loading World App...
-          </div>
+
+          <h1 className="text-3xl font-extrabold text-gray-700">
+            Loading&nbsp;World&nbsp;App…
+          </h1>
+          <CircleNotch className="w-10 h-10 animate-spin text-gray-500" />
         </div>
-      </main>
+      </MobileScreen>
     );
   }
 
+  /* --------------------------------------------------
+   * Main UI
+   * -------------------------------------------------- */
   return (
-    <main className="h-[100dvh] w-full relative overflow-hidden bg-gradient-to-br from-purple-600 to-blue-700">
-      {/* Top Header Bar */}
-      <header className="relative z-10 px-3 py-4 bg-gradient-to-r from-purple-700 to-blue-700 shadow-lg">
-        <div className="flex items-center justify-center">
-          <div className="text-lg font-bold text-white uppercase tracking-wider drop-shadow-lg">
-            Ailingo
-          </div>
+    <MobileScreen
+      className="relative flex flex-col bg-gradient-to-br from-transparent via-slate-50
+        to-slate-100 overflow-hidden"
+    >
+      <FlickeringGrid
+        className="absolute inset-0 z-0"
+        squareSize={5}
+        gridGap={3}
+        color="#000000"
+        maxOpacity={0.03}
+        flickerChance={0.05}
+        height={windowDimensions.height}
+        width={windowDimensions.width}
+      />
+      {/*  Hero  */}
+      <div className="absolute top-[15%] left-[7%] flex flex-col items-start justify-center z-2">
+        <div className="text-6xl text-gray-700">
+          Livus
         </div>
-      </header>
+      </div>
 
-      {/* Main Content */}
-      <div className="relative z-10 flex flex-col items-center justify-center h-full px-6 pb-32">
-        
-        {/* Title */}
-        <div className="text-center mb-12">
-          <div className="text-5xl font-bold text-white uppercase tracking-wider drop-shadow-lg mb-4">
-            Welcome
-          </div>
-          <div className="text-lg text-white/90 uppercase tracking-wide drop-shadow-md">
-            Choose your authentication method
-          </div>
-        </div>
+      <div
+        className="relative z-2 w-full h-screen flex flex-col items-center justify-center pt-24
+          pb-16"
+      >
+        {/*  CTA  */}
+        <section className="mt-auto space-y-6 w-full max-w-md mx-auto px-6">
+          {/* Test mode authentication */}
+          {isTestMode ? (
+            <>
+              <button
+                onClick={handleTestLogin}
+                disabled={authLoading || onboardingLoading}
+                className={cn(
+                  `w-full h-16 rounded-2xl text-lg uppercase transition-all duration-300
+                    active:scale-[0.95] active:bg-orange-600 flex items-center justify-center gap-3
+                    shadow-lg`,
+                  authLoading || onboardingLoading
+                    ? "bg-orange-300 text-orange-500 cursor-not-allowed"
+                    : `bg-orange-500 hover:bg-orange-600 text-white shadow-orange-500/30
+                      hover:shadow-orange-600/40`
+                )}
+              >
+                {authLoading ? (
+                  <>
+                    <CircleNotch className="w-6 h-6 animate-spin" />
+                    <span>Connecting...</span>
+                  </>
+                ) : (
+                  <>
+                    <LockKeyOpen className="w-6 h-6" />
+                    <span>Test Login</span>
+                  </>
+                )}
+              </button>
 
-        {/* Login Card */}
-        <div className="bg-white/95 backdrop-blur-sm border border-gray-200 shadow-2xl rounded-2xl p-8 w-full max-w-md">
-          <div className="space-y-4">
-            {/* World ID Verification Button (Recommended) */}
-            <button
-              onClick={handleWorldIdVerify}
-              disabled={verifyLoading}
-              className={cn(
-                "w-full h-14 text-white text-base font-semibold bg-gradient-to-r from-green-600 to-emerald-600 border-0 shadow-lg px-6 py-3 rounded-xl transition-all flex items-center justify-center gap-3",
-                verifyLoading
-                  ? "opacity-50 cursor-not-allowed"
-                  : "hover:from-green-700 hover:to-emerald-700 active:scale-[0.98] shadow-xl hover:shadow-green-500/25"
-              )}
-            >
-              {verifyLoading ? (
-                <>
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                  <span>Verifying...</span>
-                </>
-              ) : (
-                <>
-                  <Shield className="h-5 w-5" />
-                  <span>Verify with World ID</span>
-                </>
-              )}
-            </button>
-
-            <div className="text-xs text-center text-green-700 font-medium">
-              ⭐ Recommended - Get verified human status
-            </div>
-
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t border-gray-200" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-white px-2 text-gray-500">Or</span>
-              </div>
-            </div>
-
-            {/* World Wallet Authentication Button */}
+              <button
+                onClick={handleTestOnboarding}
+                disabled={authLoading || onboardingLoading}
+                className={cn(
+                  `w-full h-16 rounded-2xl text-lg uppercase transition-all duration-300
+                    active:scale-[0.95] active:bg-blue-600 flex items-center justify-center gap-3
+                    shadow-lg`,
+                  authLoading || onboardingLoading
+                    ? "bg-blue-300 text-blue-500 cursor-not-allowed"
+                    : `bg-blue-500 hover:bg-blue-600 text-white shadow-blue-500/30
+                      hover:shadow-blue-600/40`
+                )}
+              >
+                {onboardingLoading ? (
+                  <>
+                    <CircleNotch className="w-6 h-6 animate-spin" />
+                    <span>Creating User...</span>
+                  </>
+                ) : (
+                  <>
+                    <Globe className="w-6 h-6" />
+                    <span>Test Onboarding</span>
+                  </>
+                )}
+              </button>
+            </>
+          ) : (
+            /*  Connect wallet button  */
             <button
               onClick={handleConnectWallet}
               disabled={authLoading}
               className={cn(
-                "w-full h-14 text-white text-base font-semibold bg-gradient-to-r from-purple-600 to-blue-600 border-0 shadow-lg px-6 py-3 rounded-xl transition-all flex items-center justify-center gap-3",
+                `w-full h-16 rounded-2xl text-lg uppercase transition-all duration-300
+                  active:scale-[0.95] active:bg-gray-600 flex items-center justify-center gap-3
+                  shadow-lg`,
                 authLoading
-                  ? "opacity-50 cursor-not-allowed"
-                  : "hover:from-purple-700 hover:to-blue-700 active:scale-[0.98] shadow-xl hover:shadow-purple-500/25"
+                  ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                  : `bg-gray-500 hover:bg-gray-600 text-white shadow-gray-500/30
+                    hover:shadow-gray-600/40`
               )}
             >
               {authLoading ? (
                 <>
-                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <CircleNotch className="w-6 h-6 animate-spin" />
                   <span>Connecting...</span>
                 </>
               ) : (
                 <>
-                  <Wallet className="h-5 w-5" />
-                  <span>Connect Wallet Only</span>
+                  <LockKeyOpen className="w-6 h-6" />
+                  <span>Connect with World App</span>
                 </>
               )}
             </button>
+          )}
+        </section>
 
-            <div className="text-xs text-center text-gray-600">
-              Basic authentication without human verification
-            </div>
+        <div className="z-10 flex flex-col items-center justify-center mt-12">
+          <div className="text-sm text-gray-400 text-center font-thin uppercase">
+            Languages Supported
+          </div>
+          <div className="text-md text-gray-400 text-center font-thin uppercase mt-1">
+            PT-BR | EN-US | ES-ES | JP-JP
           </div>
         </div>
+
+        <div className="z-10 flex items-center justify-center mt-8">
+          <div
+            className={cn(
+              `group rounded-full border border-black/5 bg-neutral-100 text-base text-white
+              transition-all ease-in hover:cursor-pointer hover:bg-neutral-200
+              dark:border-white/5 dark:bg-neutral-900 dark:hover:bg-neutral-800`
+            )}
+            onClick={() => {
+              window.open("https://x.com/YoruLabs", "_blank");
+            }}
+          >
+            <AnimatedShinyText
+              className="inline-flex items-center justify-center px-4 py-1 transition ease-out
+                hover:text-neutral-600 hover:duration-300 hover:dark:text-neutral-400"
+            >
+              <span>Made by YoruLabs</span>
+              <ArrowRightIcon
+                className="ml-1 size-3 transition-transform duration-300 ease-in-out
+                  group-hover:translate-x-0.5"
+              />
+            </AnimatedShinyText>
+          </div>
+        </div>
+
+        {/* Test mode indicator */}
+        {isTestMode && (
+          <div className="z-10 mt-4 px-3 py-1 bg-orange-100 border border-orange-300 rounded-full">
+            <span className="text-sm text-orange-600 font-medium">
+              Test Mode
+            </span>
+          </div>
+        )}
+
+        <Toaster />
       </div>
-      
-      <Toaster />
-    </main>
+    </MobileScreen>
   );
-} 
+}

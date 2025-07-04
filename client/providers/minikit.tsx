@@ -11,8 +11,18 @@ export function MiniKitProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    MiniKit.install();
-    console.log(`is MiniKit installed? -> ${MiniKit.isInstalled()}`);
+    try {
+      console.log("Initializing MiniKit...");
+      MiniKit.install();
+      
+      // Small delay to ensure installation is complete
+      setTimeout(() => {
+        const isInstalled = MiniKit.isInstalled();
+        console.log(`MiniKit installation complete: ${isInstalled}`);
+      }, 100);
+    } catch (error) {
+      console.error("Error initializing MiniKit:", error);
+    }
   }, []);
 
   return <>{children}</>;

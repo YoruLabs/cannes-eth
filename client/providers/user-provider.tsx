@@ -1,56 +1,91 @@
-"use client"
+"use client";
 
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react'
-import { AuthState, UserData, createUserSession, deleteAccount as deleteUserAccount, getProfileByWallet } from '@/lib/services/auth'
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  ReactNode,
+} from "react";
+import {
+  AuthState,
+  UserData,
+  createUserSession,
+  deleteAccount as deleteUserAccount,
+  getProfileByWallet,
+  updateUserProfile,
+} from "@/lib/services/auth";
 
 interface UserContextType extends AuthState {
   login: (
-    walletAddress: string, 
+    walletAddress: string,
     username?: string,
     worldIdData?: {
-      world_id?: string
-      nullifier_hash?: string
-      verification_level?: string
-      is_verified?: boolean
+      world_id?: string;
+      nullifier_hash?: string;
+      verification_level?: string;
+      is_verified?: boolean;
     }
-  ) => Promise<void>
-  logout: () => void
-  deleteAccount: () => Promise<void>
-  refreshUserData: () => Promise<void>
+  ) => Promise<UserData>;
+  logout: () => void;
+  deleteAccount: () => Promise<void>;
+  refreshUserData: () => Promise<void>;
+  updateUser: (
+    walletAddress: string,
+    updateData: {
+      username?: string;
+      world_id?: string;
+      nullifier_hash?: string;
+      verification_level?: string;
+      is_verified?: boolean;
+      points?: number;
+    }
+  ) => Promise<void>;
 }
 
-const UserContext = createContext<UserContextType | undefined>(undefined)
+const UserContext = createContext<UserContextType | undefined>(undefined);
 
 export function useUser() {
-  const context = useContext(UserContext)
+  const context = useContext(UserContext);
   if (context === undefined) {
-    throw new Error('useUser must be used within a UserProvider')
+    throw new Error("useUser must be used within a UserProvider");
   }
-  return context
+  return context;
 }
 
 interface UserProviderProps {
-  children: ReactNode
+  children: ReactNode;
 }
 
 export function UserProvider({ children }: UserProviderProps) {
-  const [user, setUser] = useState<UserData | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [user, setUser] = useState<UserData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const isAuthenticated = !!user
+  const isAuthenticated = !!user;
 
   // Load user data from localStorage on mount
   useEffect(() => {
     const loadStoredUser = async () => {
+      console.log("=== USER PROVIDER DEBUG ===");
+      console.log("Loading stored user data...");
+
       try {
-        const storedUser = localStorage.getItem('ailingo_user')
-        
+        const storedUser = localStorage.getItem("ailingo_user");
+        console.log(
+          "Stored user from localStorage:",
+          storedUser ? JSON.parse(storedUser) : null
+        );
+
         if (storedUser) {
-          const userData = JSON.parse(storedUser) as UserData
-          setUser(userData)
-          
+          const userData = JSON.parse(storedUser) as UserData;
+          console.log("Setting user from localStorage:", userData);
+          setUser(userData);
+
           // Verify user still exists in database
-          const profile = await getProfileByWallet(userData.wallet_address)
+          console.log("Fetching fresh user data from database...");
+          const profile = await getProfileByWallet(userData.wallet_address);
+          console.log("Database profile:", profile);
+
           if (profile) {
             const updatedUserData: UserData = {
               wallet_address: profile.wallet_address,
@@ -61,70 +96,85 @@ export function UserProvider({ children }: UserProviderProps) {
               is_verified: profile.is_verified,
               created_at: profile.created_at,
               updated_at: profile.updated_at,
-            }
-            setUser(updatedUserData)
-            localStorage.setItem('ailingo_user', JSON.stringify(updatedUserData))
+            };
+            console.log("Updated user data from database:", updatedUserData);
+            setUser(updatedUserData);
+            localStorage.setItem(
+              "ailingo_user",
+              JSON.stringify(updatedUserData)
+            );
           } else {
             // User no longer exists, clear storage
-            localStorage.removeItem('ailingo_user')
-            setUser(null)
+            console.log("User no longer exists in database, clearing storage");
+            localStorage.removeItem("ailingo_user");
+            setUser(null);
           }
+        } else {
+          console.log("No stored user found");
         }
       } catch (error) {
-        console.error('Error loading stored user data:', error)
+        console.error("Error loading stored user data:", error);
         // Clear corrupted data
-        localStorage.removeItem('ailingo_user')
-        setUser(null)
+        localStorage.removeItem("ailingo_user");
+        setUser(null);
       } finally {
-        setIsLoading(false)
+        console.log(
+          "User provider loading complete, setting isLoading to false"
+        );
+        setIsLoading(false);
       }
-    }
+    };
 
-    loadStoredUser()
-  }, [])
+    loadStoredUser();
+  }, []);
 
   // Login function
   const login = async (
-    walletAddress: string, 
+    walletAddress: string,
     username?: string,
     worldIdData?: {
-      world_id?: string
-      nullifier_hash?: string
-      verification_level?: string
-      is_verified?: boolean
+      world_id?: string;
+      nullifier_hash?: string;
+      verification_level?: string;
+      is_verified?: boolean;
     }
-  ) => {
-    setIsLoading(true)
+  ): Promise<UserData> => {
+    setIsLoading(true);
     try {
       // Create or get user session from Supabase
-      const userData = await createUserSession(walletAddress, username, worldIdData)
-      
-      setUser(userData)
-      localStorage.setItem('ailingo_user', JSON.stringify(userData))
-      
-      console.log('User logged in successfully:', userData)
+      const userData = await createUserSession(
+        walletAddress,
+        username,
+        worldIdData
+      );
+
+      setUser(userData);
+      localStorage.setItem("ailingo_user", JSON.stringify(userData));
+
+      console.log("User logged in successfully:", userData);
+      return userData;
     } catch (error) {
-      console.error('Login error:', error)
-      throw error
+      console.error("Login error:", error);
+      throw error;
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   // Logout function
   const logout = () => {
-    setUser(null)
-    localStorage.removeItem('ailingo_user')
-    console.log('User logged out')
-  }
+    setUser(null);
+    localStorage.removeItem("ailingo_user");
+    console.log("User logged out");
+  };
 
   // Refresh user data
   const refreshUserData = async () => {
-    if (!user) return
-    
+    if (!user) return;
+
     try {
       // Get fresh user data from database
-      const profile = await getProfileByWallet(user.wallet_address)
+      const profile = await getProfileByWallet(user.wallet_address);
       if (profile) {
         const updatedUserData: UserData = {
           wallet_address: profile.wallet_address,
@@ -135,29 +185,55 @@ export function UserProvider({ children }: UserProviderProps) {
           is_verified: profile.is_verified,
           created_at: profile.created_at,
           updated_at: profile.updated_at,
-        }
-        setUser(updatedUserData)
-        localStorage.setItem('ailingo_user', JSON.stringify(updatedUserData))
+        };
+        setUser(updatedUserData);
+        localStorage.setItem("ailingo_user", JSON.stringify(updatedUserData));
       }
     } catch (error) {
-      console.error('Error refreshing user data:', error)
+      console.error("Error refreshing user data:", error);
     }
-  }
+  };
 
   // Delete account
   const deleteAccount = async () => {
-    if (!user) return
-    
+    if (!user) return;
+
     try {
-      await deleteUserAccount(user.wallet_address)
-      setUser(null)
-      localStorage.removeItem('ailingo_user')
-      console.log('Account deleted')
+      await deleteUserAccount(user.wallet_address);
+      setUser(null);
+      localStorage.removeItem("ailingo_user");
+      console.log("Account deleted");
     } catch (error) {
-      console.error('Error deleting account:', error)
-      throw error
+      console.error("Error deleting account:", error);
+      throw error;
     }
-  }
+  };
+
+  // Update user profile
+  const updateUser = async (
+    walletAddress: string,
+    updateData: {
+      username?: string;
+      world_id?: string;
+      nullifier_hash?: string;
+      verification_level?: string;
+      is_verified?: boolean;
+      points?: number;
+    }
+  ) => {
+    try {
+      const updatedUserData = await updateUserProfile(
+        walletAddress,
+        updateData
+      );
+      setUser(updatedUserData);
+      localStorage.setItem("ailingo_user", JSON.stringify(updatedUserData));
+      console.log("User updated successfully:", updatedUserData);
+    } catch (error) {
+      console.error("Error updating user:", error);
+      throw error;
+    }
+  };
 
   const contextValue: UserContextType = {
     user,
@@ -166,11 +242,10 @@ export function UserProvider({ children }: UserProviderProps) {
     logout,
     deleteAccount,
     refreshUserData,
-  }
+    updateUser,
+  };
 
   return (
-    <UserContext.Provider value={contextValue}>
-      {children}
-    </UserContext.Provider>
-  )
-} 
+    <UserContext.Provider value={contextValue}>{children}</UserContext.Provider>
+  );
+}

@@ -1,71 +1,73 @@
-import { supabase } from '@/lib/supabase/client'
-import { Database } from '@/lib/types/database'
+import { supabase } from "@/lib/supabase/client";
+import { Database } from "@/lib/types/database";
 
-type Profile = Database['public']['Tables']['profiles']['Row']
+type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 
 export interface UserData {
-  wallet_address: string
-  username: string
-  world_id: string | null
-  nullifier_hash: string | null
-  verification_level: string | null
-  is_verified: boolean
-  created_at: string
-  updated_at: string
+  wallet_address: string;
+  username: string;
+  world_id: string | null;
+  nullifier_hash: string | null;
+  verification_level: string | null;
+  is_verified: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface AuthState {
-  user: UserData | null
-  isLoading: boolean
+  user: UserData | null;
+  isLoading: boolean;
 }
 
 // Get user profile by wallet address
-export async function getProfileByWallet(walletAddress: string): Promise<Profile | null> {
+export async function getProfileByWallet(
+  walletAddress: string
+): Promise<Profile | null> {
   try {
     const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('wallet_address', walletAddress)
-      .single()
+      .from("profiles")
+      .select("*")
+      .eq("wallet_address", walletAddress)
+      .single();
 
     if (error) {
-      if (error.code === 'PGRST116') {
+      if (error.code === "PGRST116") {
         // No user found
-        return null
+        return null;
       }
-      throw error
+      throw error;
     }
 
-    return data
+    return data;
   } catch (error) {
-    console.error('Error fetching user profile:', error)
-    return null
+    console.error("Error fetching user profile:", error);
+    return null;
   }
 }
 
 // Create or update user session after World ID verification
 export async function createUserSession(
-  walletAddress: string, 
+  walletAddress: string,
   username?: string,
   worldIdData?: {
-    world_id?: string
-    nullifier_hash?: string
-    verification_level?: string
-    is_verified?: boolean
+    world_id?: string;
+    nullifier_hash?: string;
+    verification_level?: string;
+    is_verified?: boolean;
   }
 ): Promise<UserData> {
   try {
     // First, try to get existing user
-    let profile = await getProfileByWallet(walletAddress)
+    let profile = await getProfileByWallet(walletAddress);
 
     if (!profile) {
       // Create new user
       if (!username) {
-        throw new Error('Username is required for new users')
+        throw new Error("Username is required for new users");
       }
 
       const { data, error } = await supabase
-        .from('profiles')
+        .from("profiles")
         .insert({
           wallet_address: walletAddress,
           username: username,
@@ -75,47 +77,50 @@ export async function createUserSession(
           is_verified: worldIdData?.is_verified || false,
         })
         .select()
-        .single()
+        .single();
 
       if (error) {
-        throw error
+        throw error;
       }
 
-      profile = data
+      profile = data;
     } else {
       // Update existing user with new data
-      const updateData: any = {}
-      
+      const updateData: any = {};
+
       if (username && profile.username !== username) {
-        updateData.username = username
+        updateData.username = username;
       }
-      
+
       if (worldIdData) {
-        if (worldIdData.world_id) updateData.world_id = worldIdData.world_id
-        if (worldIdData.nullifier_hash) updateData.nullifier_hash = worldIdData.nullifier_hash
-        if (worldIdData.verification_level) updateData.verification_level = worldIdData.verification_level
-        if (worldIdData.is_verified !== undefined) updateData.is_verified = worldIdData.is_verified
+        if (worldIdData.world_id) updateData.world_id = worldIdData.world_id;
+        if (worldIdData.nullifier_hash)
+          updateData.nullifier_hash = worldIdData.nullifier_hash;
+        if (worldIdData.verification_level)
+          updateData.verification_level = worldIdData.verification_level;
+        if (worldIdData.is_verified !== undefined)
+          updateData.is_verified = worldIdData.is_verified;
       }
 
       if (Object.keys(updateData).length > 0) {
         const { data, error } = await supabase
-          .from('profiles')
+          .from("profiles")
           .update(updateData)
-          .eq('wallet_address', walletAddress)
+          .eq("wallet_address", walletAddress)
           .select()
-          .single()
+          .single();
 
         if (error) {
-          throw error
+          throw error;
         }
 
-        profile = data
+        profile = data;
       }
     }
 
     // At this point, profile is guaranteed to be non-null
     if (!profile) {
-      throw new Error('Failed to create or retrieve user profile')
+      throw new Error("Failed to create or retrieve user profile");
     }
 
     return {
@@ -127,10 +132,10 @@ export async function createUserSession(
       is_verified: profile.is_verified,
       created_at: profile.created_at,
       updated_at: profile.updated_at,
-    }
+    };
   } catch (error) {
-    console.error('Error creating user session:', error)
-    throw error
+    console.error("Error creating user session:", error);
+    throw error;
   }
 }
 
@@ -138,15 +143,63 @@ export async function createUserSession(
 export async function deleteAccount(walletAddress: string): Promise<void> {
   try {
     const { error } = await supabase
-      .from('profiles')
+      .from("profiles")
       .delete()
-      .eq('wallet_address', walletAddress)
+      .eq("wallet_address", walletAddress);
 
     if (error) {
-      throw error
+      throw error;
     }
   } catch (error) {
-    console.error('Error deleting account:', error)
-    throw error
+    console.error("Error deleting account:", error);
+    throw error;
   }
-} 
+}
+
+// Update user profile with specific fields
+export async function updateUserProfile(
+  walletAddress: string,
+  updateData: {
+    username?: string;
+    world_id?: string;
+    nullifier_hash?: string;
+    verification_level?: string;
+    is_verified?: boolean;
+    native_language?: string;
+    active_learning_language?: string;
+  }
+): Promise<UserData> {
+  try {
+    // Get current profile to check if active_learning_language is changing
+    const currentProfile = await getProfileByWallet(walletAddress);
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .update(updateData)
+      .eq("wallet_address", walletAddress)
+      .select()
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    if (!data) {
+      throw new Error("Failed to update user profile");
+    }
+
+    return {
+      wallet_address: data.wallet_address,
+      username: data.username,
+      world_id: data.world_id,
+      nullifier_hash: data.nullifier_hash,
+      verification_level: data.verification_level,
+      is_verified: data.is_verified,
+      created_at: data.created_at,
+      updated_at: data.updated_at,
+    };
+  } catch (error) {
+    console.error("Error updating user profile:", error);
+    throw error;
+  }
+}
