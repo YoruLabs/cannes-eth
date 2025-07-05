@@ -53,6 +53,7 @@ export default function WhoopConnect() {
   const [authCode, setAuthCode] = useState<string | null>(null);
   const [tokenExchangeLoading, setTokenExchangeLoading] = useState(false);
   const [dataFetchLoading, setDataFetchLoading] = useState(false);
+  const [autoExchangeAttempted, setAutoExchangeAttempted] = useState(false);
 
   // Add debug logging
   const addDebugLog = (message: string) => {
@@ -173,15 +174,24 @@ export default function WhoopConnect() {
     checkForAuthCode();
   }, []);
 
-  const handleManualTokenExchange = async () => {
-    if (!authCode) {
+  // Automatic token exchange when auth code is found
+  useEffect(() => {
+    if (authCode && !tokens && !tokenExchangeLoading && !autoExchangeAttempted) {
+      addDebugLog('Starting automatic token exchange');
+      setAutoExchangeAttempted(true);
+      handleTokenExchange(authCode);
+    }
+  }, [authCode, tokens, tokenExchangeLoading, autoExchangeAttempted]);
+
+  const handleTokenExchange = async (code: string) => {
+    if (!code) {
       setError("No auth code found");
       return;
     }
     
     setTokenExchangeLoading(true);
     setError(null);
-    addDebugLog(`Starting manual token exchange with code: ${authCode}`);
+    addDebugLog(`Starting token exchange with code: ${code}`);
     addDebugLog(`Using redirect URI: ${REDIRECT_URI}`);
     
     try {
@@ -189,7 +199,7 @@ export default function WhoopConnect() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
-          code: authCode, 
+          code: code, 
           redirectUri: REDIRECT_URI // Use the same redirect URI as in auth
         })
       });
@@ -214,6 +224,14 @@ export default function WhoopConnect() {
     } finally {
       setTokenExchangeLoading(false);
     }
+  };
+
+  const handleManualTokenExchange = () => {
+    if (!authCode) {
+      setError("No auth code found");
+      return;
+    }
+    handleTokenExchange(authCode);
   };
 
   const handleManualDataFetch = async () => {
@@ -257,7 +275,18 @@ export default function WhoopConnect() {
     addDebugLog(`Starting auth flow with state: ${state}`);
     addDebugLog(`Using redirect URI: ${REDIRECT_URI}`);
     
-    window.location.href = "https://api.prod.whoop.com/oauth/oauth2/auth?response_type=code&client_id=186dab5b-12d3-411a-86d7-4f187d0fcff0&redirect_uri=https%3A%2F%2F996d-83-144-23-156.ngrok-free.app%2Fwhoop&scope=offline%20read%3Arecovery%20read%3Acycles%20read%3Aworkout%20read%3Asleep%20read%3Aprofile%20read%3Abody_measurement&state=STATE123"
+    // Build the OAuth URL dynamically
+    const authURL = new URL("https://api.prod.whoop.com/oauth/oauth2/auth");
+    authURL.searchParams.set("response_type", "code");
+    authURL.searchParams.set("client_id", process.env.NEXT_PUBLIC_WHOOP_CLIENT_ID!);
+    authURL.searchParams.set("redirect_uri", REDIRECT_URI);
+    authURL.searchParams.set("scope", SCOPES);
+    authURL.searchParams.set("state", state);
+    
+    const finalURL = authURL.toString();
+    addDebugLog(`Generated OAuth URL: ${finalURL}`);
+    
+    window.location.href = finalURL;
   };
 
   const resetConnection = () => {
@@ -266,6 +295,7 @@ export default function WhoopConnect() {
     setError(null);
     setDebugInfo([]);
     setAuthCode(null);
+    setAutoExchangeAttempted(false);
     // Clear URL parameters
     window.history.replaceState({}, document.title, window.location.pathname);
   };
@@ -381,7 +411,7 @@ export default function WhoopConnect() {
         <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-6">
           <h3 className="text-lg font-semibold mb-3 text-black">Debug Controls</h3>
           <div className="flex flex-wrap gap-3">
-            {!authCode && (
+            {!authCode && !tokens && (
               <button 
                 onClick={handleAuthClick}
                 className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-colors"
@@ -396,7 +426,7 @@ export default function WhoopConnect() {
                 disabled={tokenExchangeLoading}
                 className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition-colors disabled:opacity-50"
               >
-                {tokenExchangeLoading ? 'Exchanging...' : 'Exchange Token'}
+                {tokenExchangeLoading ? 'Exchanging...' : 'Manual Exchange Token'}
               </button>
             )}
             
@@ -419,10 +449,40 @@ export default function WhoopConnect() {
           </div>
         </div>
 
-        {loading && (
+        {/* Loading States */}
+        {(tokenExchangeLoading || dataFetchLoading) && (
           <div className="text-center py-4">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <p className="mt-2 text-black">Loading...</p>
+            <p className="mt-2 text-black">
+              {tokenExchangeLoading ? 'Exchanging token...' : 'Fetching data...'}
+            </p>
+          </div>
+        )}
+
+        {/* Welcome Message */}
+        {!authCode && !tokens && (
+          <div className="text-center">
+            <p className="text-black mb-6">
+              Connect your WHOOP account to access your complete health data including recovery, 
+              sleep, workouts, cycles, and body measurements.
+            </p>
+            <button 
+              onClick={handleAuthClick}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-colors"
+            >
+              Connect WHOOP (All Data)
+            </button>
+            <div className="mt-4 text-sm text-black">
+              <p>Requested permissions:</p>
+              <ul className="mt-2 space-y-1">
+                <li>• Recovery data</li>
+                <li>• Sleep data</li>
+                <li>• Workout data</li>
+                <li>• Cycle data</li>
+                <li>• Profile information</li>
+                <li>• Body measurements</li>
+              </ul>
+            </div>
           </div>
         )}
 
@@ -453,6 +513,17 @@ export default function WhoopConnect() {
                   </div>
                 )}
               </div>
+            </div>
+
+            {/* Auto-fetch data button */}
+            <div className="flex gap-4">
+              <button 
+                onClick={handleManualDataFetch}
+                disabled={dataFetchLoading}
+                className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition-colors disabled:opacity-50"
+              >
+                {dataFetchLoading ? 'Fetching...' : 'Get All WHOOP Data'}
+              </button>
             </div>
 
             {whoopData && (
