@@ -997,36 +997,38 @@ class ChallengeService {
         .eq('challenge_id', challengeId)
         .single();
 
-      if (dbError && dbError.code !== 'PGRST116') {
+      if (dbError) {
+        if (dbError.code === 'PGRST116') {
+          // Not found
+          return null;
+        }
         logger.error('Failed to get challenge from database', {
           error: dbError,
         });
         throw new Error(`Database error: ${dbError.message}`);
       }
 
-      if (!dbChallenge) {
-        return null;
-      }
-
-      // Process database data with time-based calculations
-      const challengeData = {
-        id: challengeId,
-        title: dbChallenge.title || `Challenge #${challengeId}`,
-        description:
-          dbChallenge.description || 'Complete your health goals to win!',
-        challengeType: dbChallenge.challenge_type || 'health',
+      // Process and format the challenge data
+      const processedChallenge = {
+        id: dbChallenge.challenge_id,
+        title: dbChallenge.title,
+        description: dbChallenge.description,
+        challengeType: dbChallenge.challenge_type,
         entryStartTime: dbChallenge.entry_start_time,
         entryEndTime: dbChallenge.entry_end_time,
         challengeStartTime: dbChallenge.challenge_start_time,
         challengeEndTime: dbChallenge.challenge_end_time,
         requirements: dbChallenge.requirements || {},
-        status: dbChallenge.status || 'created',
+        challengeRequirements:
+          dbChallenge.challenge_requirements ||
+          dbChallenge.requirements?.challengeRequirements ||
+          this.getDefaultRequirements(dbChallenge.challenge_type),
+        status: dbChallenge.status,
         createdAt: dbChallenge.created_at,
         startedAt: dbChallenge.started_at,
         completedAt: dbChallenge.completed_at,
         transactionHash: dbChallenge.transaction_hash,
         completionTransactionHash: dbChallenge.completion_transaction_hash,
-        // Sleep challenge specific fields
         metricType: dbChallenge.metric_type,
         metricCalculation: dbChallenge.metric_calculation,
         targetValue: dbChallenge.target_value,
@@ -1052,8 +1054,8 @@ class ChallengeService {
           : false,
       };
 
-      logger.info('Challenge data retrieved from database', { challengeData });
-      return challengeData;
+      logger.info('Challenge retrieved from database', { processedChallenge });
+      return processedChallenge;
     } catch (error) {
       logger.error('Failed to get challenge from database', {
         error: error.message,
@@ -1145,6 +1147,56 @@ class ChallengeService {
         challengeIds,
       });
       throw error;
+    }
+  }
+
+  /**
+   * Get default requirements for a challenge type
+   * @param {string} challengeType - Type of challenge
+   * @returns {Array} Array of requirement strings
+   */
+  getDefaultRequirements(challengeType) {
+    switch (challengeType) {
+      case 'sleep_efficiency':
+        return [
+          'Achieve average sleep efficiency of 85% or higher',
+          'Track sleep data for minimum 7 consecutive days',
+          'Connect Terra fitness tracker to your account',
+          'Maintain consistent sleep schedule throughout challenge period',
+        ];
+      case 'sleep_duration':
+        return [
+          'Sleep minimum 9 hours per night on average',
+          'Track sleep data for minimum 7 consecutive days',
+          'Connect Terra fitness tracker to your account',
+          'Maintain consistent bedtime and wake-up schedule',
+        ];
+      case 'health':
+      default:
+        return [
+          'Complete daily health goals consistently',
+          'Connect and sync your fitness tracking device',
+          'Maintain activity throughout the challenge period',
+          'Submit valid health data for verification',
+        ];
+    }
+  }
+
+  /**
+   * Get default professional description for a challenge type
+   * @param {string} challengeType - Type of challenge
+   * @param {number} targetValue - Target value for the challenge
+   * @returns {string} Professional description
+   */
+  getDefaultDescription(challengeType, targetValue = null) {
+    switch (challengeType) {
+      case 'sleep_efficiency':
+        return `Demonstrate your commitment to quality sleep by maintaining an average sleep efficiency of ${targetValue || 85}% or higher over a 7-day period. Sleep efficiency measures the percentage of time spent asleep while in bed.`;
+      case 'sleep_duration':
+        return `Prioritize your sleep health by achieving an average of ${targetValue ? Math.round(targetValue / 3600) : 9} hours of sleep per night over a 7-day period. Consistent, adequate sleep is fundamental to overall wellness.`;
+      case 'health':
+      default:
+        return 'Complete your personalized health goals and demonstrate consistency in your wellness journey. Track your progress and compete with others committed to healthy living.';
     }
   }
 }

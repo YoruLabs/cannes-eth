@@ -11,6 +11,20 @@ const server = fastify({
   trustProxy: true,
 });
 
+// Register CORS plugin
+server.register(require('@fastify/cors'), {
+  origin: [
+    'http://localhost:3000',
+    'https://mantis-famous-personally.ngrok-free.app',
+    /\.vercel\.app$/,
+    /\.netlify\.app$/,
+    /\.ngrok\.app$/,
+    /\.ngrok-free\.app$/,
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+});
+
 // Register JSON body parser
 server.addContentTypeParser(
   'application/json',

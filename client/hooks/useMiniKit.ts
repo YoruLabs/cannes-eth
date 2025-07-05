@@ -20,7 +20,6 @@ interface UseMiniKitReturn {
   wldBalance: string;
   
   // Contract functions
-  getChallengeData: (challengeId: number) => Promise<any>;
   getChallengeCounter: () => Promise<number>;
   getChallengeBlockchainData: (challengeId: number) => Promise<any>;
   getChallengeDatabaseData: (challengeId: number) => Promise<any>;
@@ -29,6 +28,7 @@ interface UseMiniKitReturn {
   getMultipleCombinedChallengeData: (challengeIds: number[]) => Promise<any[]>;
   joinChallenge: (challengeId: number, entryFee: string) => Promise<{ success: boolean; txId?: string; error?: string }>;
   completeChallenge: (challengeId: number) => Promise<{ success: boolean; txId?: string; error?: string }>;
+  checkParticipation: (challengeId: number, walletAddress: string) => Promise<boolean>;
 }
 
 // Create public client for reading contract data
@@ -66,60 +66,6 @@ export const useMiniKit = (): UseMiniKitReturn => {
     } catch (error) {
       console.error('❌ Failed to get WLD balance:', error);
       return '0';
-    }
-  }, []);
-
-  // Get challenge data from contract
-  const getChallengeData = useCallback(async (challengeId: number) => {
-    console.log('🔍 Getting challenge data for ID:', challengeId);
-    
-    // Return mock data in test environment
-    if (isTestEnvironment) {
-      return {
-        id: challengeId,
-        entryFee: '0.01',
-        totalPool: '0.01',
-        participantCount: 1,
-        winnerCount: 1,
-        isActive: false,
-        isCompleted: true,
-        name: `Challenge #${challengeId}`,
-        description: 'Complete your health goals to win!',
-        challengeType: 'health',
-      };
-    }
-
-    try {
-      const challenge = await publicClient.readContract({
-        address: HEALTH_CHALLENGE_ADDRESS,
-        abi: HEALTH_CHALLENGE_ABI,
-        functionName: 'getChallengeDetails',
-        args: [BigInt(challengeId)],
-      });
-      
-      console.log('✅ Raw challenge data:', challenge);
-      
-      const challengeData = {
-        id: Number(challenge[0]),
-        entryFee: formatEther(challenge[1] as bigint),
-        totalPool: formatEther(challenge[2] as bigint),
-        participantCount: Number(challenge[3]),
-        winnerCount: Number(challenge[4]),
-        isActive: challenge[5],
-        isCompleted: challenge[6],
-        // Add default metadata
-        name: `Challenge #${challengeId}`,
-        description: 'Complete your health goals to win!',
-        challengeType: 'health',
-      };
-      
-      console.log('✅ Processed challenge data:', challengeData);
-      return challengeData;
-    } catch (error) {
-      console.error('❌ Failed to get challenge data:', error);
-      console.error('Challenge ID:', challengeId);
-      console.error('Contract address:', HEALTH_CHALLENGE_ADDRESS);
-      return null;
     }
   }, []);
 
@@ -171,14 +117,16 @@ export const useMiniKit = (): UseMiniKitReturn => {
         args: [BigInt(challengeId)],
       });
       
+      console.log('✅ Raw blockchain data:', challenge);
+      
       return {
         id: Number(challenge[0]),
         entryFee: formatEther(challenge[1] as bigint),
         totalPool: formatEther(challenge[2] as bigint),
         participantCount: Number(challenge[3]),
         winnerCount: Number(challenge[4]),
-        isActive: challenge[5],
-        isCompleted: challenge[6],
+        isActive: challenge[5] as boolean,
+        isCompleted: challenge[6] as boolean,
       };
     } catch (error) {
       console.error('❌ Failed to get blockchain data:', error);
@@ -205,14 +153,38 @@ export const useMiniKit = (): UseMiniKitReturn => {
     }
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL}/api/challenges/db-only/${challengeId}`);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      const serverUrl = process.env.NEXT_PUBLIC_SERVER_URL;
+      if (!serverUrl) {
+        throw new Error('NEXT_PUBLIC_SERVER_URL environment variable is not set');
       }
+
+      const url = `${serverUrl}/api/challenges/db-only/${challengeId}`;
+      console.log('📡 Fetching from URL:', url);
+
+      const response = await fetch(url);
+      
+      console.log('📊 Database fetch response status:', response.status);
+      console.log('📊 Database fetch response ok:', response.ok);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Database fetch error response:', errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+      
       const data = await response.json();
+      console.log('✅ Database response:', data);
+      
       return data.success ? data.data : null;
     } catch (error) {
-      console.error('❌ Failed to get database data:', error);
+      console.error('❌ Database fetch failed with detailed error:', {
+        challengeId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        name: error instanceof Error ? error.name : 'Unknown',
+        stack: error instanceof Error ? error.stack : 'No stack trace',
+        serverUrl: process.env.NEXT_PUBLIC_SERVER_URL,
+        note: 'Using fallback data instead'
+      });
       return null;
     }
   }, []);
@@ -236,14 +208,33 @@ export const useMiniKit = (): UseMiniKitReturn => {
     }
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL}/api/challenges/db-only/batch/${challengeIds.join(',')}`);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      const serverUrl = process.env.NEXT_PUBLIC_SERVER_URL;
+      if (!serverUrl) {
+        throw new Error('NEXT_PUBLIC_SERVER_URL environment variable is not set');
       }
+
+      const url = `${serverUrl}/api/challenges/db-only/batch/${challengeIds.join(',')}`;
+      console.log('📡 Fetching from URL:', url);
+
+      const response = await fetch(url);
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+      
       const data = await response.json();
+      console.log('✅ Database response:', data);
+      
       return data.success ? data.data : [];
     } catch (error) {
-      console.error('❌ Failed to get multiple database data:', error);
+      console.warn('⚠️ Database fetch failed, using fallback data:', {
+        error: error instanceof Error ? error.message : String(error),
+        serverUrl: process.env.NEXT_PUBLIC_SERVER_URL,
+        challengeIds: challengeIds,
+        note: 'This is expected if some challenges only exist on blockchain'
+      });
+      
+      // Return empty array instead of throwing, so the app can continue with fallback data
       return [];
     }
   }, []);
@@ -253,22 +244,80 @@ export const useMiniKit = (): UseMiniKitReturn => {
     console.log('🔍 Getting combined challenge data for ID:', challengeId);
     
     try {
-      // Fetch both blockchain and database data in parallel
-      const [blockchainData, databaseData] = await Promise.all([
-        getChallengeBlockchainData(challengeId),
-        getChallengeDatabaseData(challengeId),
-      ]);
-
+      // Fetch blockchain data first
+      const blockchainData = await getChallengeBlockchainData(challengeId);
+      
       if (!blockchainData) {
         console.error('❌ No blockchain data found for challenge:', challengeId);
         return null;
       }
 
+      // Try to fetch database data, but don't fail if it's not available
+      let databaseData = null;
+      try {
+        databaseData = await getChallengeDatabaseData(challengeId);
+      } catch (error) {
+        console.info('ℹ️ Database data not available for challenge, using fallback:', challengeId);
+        databaseData = null;
+      }
+
+      // Helper methods for fallback data
+      const getDefaultDescription = (challengeType: string) => {
+        switch (challengeType) {
+          case 'sleep_efficiency':
+            return 'Demonstrate your commitment to quality sleep by maintaining an average sleep efficiency of 85% or higher over a 7-day period. Sleep efficiency measures the percentage of time spent asleep while in bed.';
+          case 'sleep_duration':
+            return 'Prioritize your sleep health by achieving an average of 9 hours of sleep per night over a 7-day period. Consistent, adequate sleep is fundamental to overall wellness.';
+          case 'health':
+          default:
+            return 'Complete your personalized health goals and demonstrate consistency in your wellness journey. Track your progress and compete with others committed to healthy living.';
+        }
+      };
+
+      const getDefaultRequirements = (challengeType: string) => {
+        switch (challengeType) {
+          case 'sleep_efficiency':
+            return [
+              'Achieve average sleep efficiency of 85% or higher',
+              'Track sleep data for minimum 7 consecutive days',
+              'Connect Terra fitness tracker to your account',
+              'Maintain consistent sleep schedule throughout challenge period'
+            ];
+          case 'sleep_duration':
+            return [
+              'Sleep minimum 9 hours per night on average',
+              'Track sleep data for minimum 7 consecutive days',
+              'Connect Terra fitness tracker to your account',
+              'Maintain consistent bedtime and wake-up schedule'
+            ];
+          case 'health':
+          default:
+            return [
+              'Complete daily health goals consistently',
+              'Connect and sync your fitness tracking device',
+              'Maintain activity throughout the challenge period',
+              'Submit valid health data for verification'
+            ];
+        }
+      };
+
+      // Create fallback data for challenges without database entries
+      const fallbackData = {
+        id: challengeId,
+        title: `Challenge #${challengeId}`,
+        description: getDefaultDescription('health'), // Default to health type
+        challengeType: 'health',
+        status: 'created',
+        canJoinNow: true,
+        challengeRequirements: getDefaultRequirements('health'), // Default to health type
+      };
+
       // Combine the data (database data takes precedence for metadata)
       const combinedData = {
+        ...fallbackData,
         ...blockchainData,
         ...databaseData,
-        // Ensure blockchain data for these fields
+        // Ensure blockchain data for these critical fields
         entryFee: blockchainData.entryFee,
         totalPool: blockchainData.totalPool,
         participantCount: blockchainData.participantCount,
@@ -276,6 +325,29 @@ export const useMiniKit = (): UseMiniKitReturn => {
         isActive: blockchainData.isActive,
         isCompleted: blockchainData.isCompleted,
       };
+
+      // Add challenge lifecycle status calculations
+      const now = new Date();
+      const entryStartTime = databaseData?.entryStartTime ? new Date(databaseData.entryStartTime) : null;
+      const entryEndTime = databaseData?.entryEndTime ? new Date(databaseData.entryEndTime) : null;
+      const challengeStartTime = databaseData?.challengeStartTime ? new Date(databaseData.challengeStartTime) : null;
+      const challengeEndTime = databaseData?.challengeEndTime ? new Date(databaseData.challengeEndTime) : null;
+
+      // Calculate status flags
+      const entryPeriodOpen = entryStartTime && entryEndTime && now >= entryStartTime && now <= entryEndTime;
+      const entryPeriodClosed = entryEndTime && now > entryEndTime;
+      const isCurrentlyActive = challengeStartTime && challengeEndTime && now >= challengeStartTime && now <= challengeEndTime;
+      const shouldBeCompleted = challengeEndTime && now > challengeEndTime;
+
+      // Add status information
+      combinedData.canJoinNow = entryPeriodOpen && !combinedData.isCompleted;
+      combinedData.entryPeriodClosed = entryPeriodClosed;
+      combinedData.isCurrentlyActive = isCurrentlyActive;
+      combinedData.shouldBeCompleted = shouldBeCompleted;
+      combinedData.entryStartTime = entryStartTime;
+      combinedData.entryEndTime = entryEndTime;
+      combinedData.challengeStartTime = challengeStartTime;
+      combinedData.challengeEndTime = challengeEndTime;
 
       console.log('✅ Combined challenge data:', combinedData);
       return combinedData;
@@ -290,27 +362,103 @@ export const useMiniKit = (): UseMiniKitReturn => {
     console.log('🔍 Getting combined data for multiple challenges:', challengeIds);
     
     try {
-      // Fetch database data for all challenges
-      const databaseData = await getMultipleChallengeDatabaseData(challengeIds);
-      
       // Fetch blockchain data for each challenge in parallel
       const blockchainPromises = challengeIds.map(id => getChallengeBlockchainData(id));
       const blockchainResults = await Promise.all(blockchainPromises);
 
+      // Filter out null results (challenges that don't exist on blockchain)
+      const validChallenges = challengeIds.filter((_, index) => blockchainResults[index] !== null);
+      const validBlockchainData = blockchainResults.filter(result => result !== null);
+
+      if (validChallenges.length === 0) {
+        console.log('ℹ️ No valid challenges found on blockchain');
+        return [];
+      }
+
+      // Fetch database data for valid challenges
+      let databaseData = [];
+      try {
+        databaseData = await getMultipleChallengeDatabaseData(validChallenges);
+      } catch (error) {
+        console.info('ℹ️ Using fallback data for challenges without database entries:', error);
+        databaseData = [];
+      }
+
       // Combine the data
-      const combinedChallenges = challengeIds.map((challengeId, index) => {
-        const blockchainData = blockchainResults[index];
+      const combinedChallenges = validChallenges.map((challengeId, index) => {
+        const blockchainData = validBlockchainData[index];
         const dbData = databaseData.find((db: any) => db.id === challengeId);
 
-        if (!blockchainData) {
-          console.warn('❌ No blockchain data for challenge:', challengeId);
-          return null;
-        }
+        // Helper methods for fallback data
+        const getDefaultDescription = (challengeType: string) => {
+          switch (challengeType) {
+            case 'sleep_efficiency':
+              return 'Demonstrate your commitment to quality sleep by maintaining an average sleep efficiency of 85% or higher over a 7-day period.';
+            case 'sleep_duration':
+              return 'Prioritize your sleep health by achieving an average of 9 hours of sleep per night over a 7-day period.';
+            case 'health':
+            default:
+              return 'Complete your personalized health goals and demonstrate consistency in your wellness journey.';
+          }
+        };
 
-        return {
+        const getDefaultRequirements = (challengeType: string) => {
+          switch (challengeType) {
+            case 'sleep_efficiency':
+              return [
+                'Achieve average sleep efficiency of 85% or higher',
+                'Track sleep data for minimum 7 consecutive days',
+                'Connect Terra fitness tracker to your account',
+                'Maintain consistent sleep schedule throughout challenge period'
+              ];
+            case 'sleep_duration':
+              return [
+                'Sleep minimum 9 hours per night on average',
+                'Track sleep data for minimum 7 consecutive days',
+                'Connect Terra fitness tracker to your account',
+                'Maintain consistent bedtime and wake-up schedule'
+              ];
+            case 'health':
+            default:
+              return [
+                'Complete daily health goals consistently',
+                'Connect and sync your fitness tracking device',
+                'Maintain activity throughout the challenge period',
+                'Submit valid health data for verification'
+              ];
+          }
+        };
+
+        // Create fallback data for challenges without database entries
+        const fallbackData = {
+          id: challengeId,
+          title: `Challenge #${challengeId}`,
+          description: getDefaultDescription('health'), // Default to health type
+          challengeType: 'health',
+          status: 'created',
+          canJoinNow: true,
+          challengeRequirements: getDefaultRequirements('health'), // Default to health type
+        };
+
+        // Add challenge lifecycle status calculations
+        const now = new Date();
+        const entryStartTime = dbData?.entryStartTime ? new Date(dbData.entryStartTime) : null;
+        const entryEndTime = dbData?.entryEndTime ? new Date(dbData.entryEndTime) : null;
+        const challengeStartTime = dbData?.challengeStartTime ? new Date(dbData.challengeStartTime) : null;
+        const challengeEndTime = dbData?.challengeEndTime ? new Date(dbData.challengeEndTime) : null;
+
+        // Calculate status flags
+        const entryPeriodOpen = entryStartTime && entryEndTime && now >= entryStartTime && now <= entryEndTime;
+        const entryPeriodClosed = entryEndTime && now > entryEndTime;
+        const isCurrentlyActive = challengeStartTime && challengeEndTime && now >= challengeStartTime && now <= challengeEndTime;
+        const shouldBeCompleted = challengeEndTime && now > challengeEndTime;
+
+        // Add status information
+        const combinedData = {
+          ...fallbackData,
           ...blockchainData,
           ...dbData,
-          // Ensure blockchain data for these fields
+          // Ensure blockchain data for these critical fields
           entryFee: blockchainData.entryFee,
           totalPool: blockchainData.totalPool,
           participantCount: blockchainData.participantCount,
@@ -318,7 +466,17 @@ export const useMiniKit = (): UseMiniKitReturn => {
           isActive: blockchainData.isActive,
           isCompleted: blockchainData.isCompleted,
         };
-      }).filter(Boolean); // Remove null entries
+        combinedData.canJoinNow = entryPeriodOpen && !combinedData.isCompleted;
+        combinedData.entryPeriodClosed = entryPeriodClosed;
+        combinedData.isCurrentlyActive = isCurrentlyActive;
+        combinedData.shouldBeCompleted = shouldBeCompleted;
+        combinedData.entryStartTime = entryStartTime;
+        combinedData.entryEndTime = entryEndTime;
+        combinedData.challengeStartTime = challengeStartTime;
+        combinedData.challengeEndTime = challengeEndTime;
+
+        return combinedData;
+      });
 
       console.log('✅ Combined multiple challenge data:', combinedChallenges);
       return combinedChallenges;
@@ -404,6 +562,16 @@ export const useMiniKit = (): UseMiniKitReturn => {
       }
 
       console.log('✅ Transaction sent:', finalPayload.transaction_id);
+
+      // Record participation in database after successful transaction
+      try {
+        await recordChallengeParticipation(challengeId, address, finalPayload.transaction_id);
+        console.log('✅ Participation recorded in database');
+      } catch (dbError) {
+        console.warn('⚠️ Failed to record participation in database:', dbError);
+        // Don't fail the whole operation if database recording fails
+      }
+
       return { success: true, txId: finalPayload.transaction_id };
 
     } catch (error) {
@@ -422,6 +590,61 @@ export const useMiniKit = (): UseMiniKitReturn => {
       setIsLoading(false);
     }
   }, [address, isConnected]);
+
+  // Record challenge participation in database
+  const recordChallengeParticipation = useCallback(async (challengeId: number, walletAddress: string, transactionHash: string) => {
+    if (isTestEnvironment) {
+      console.log('🧪 Mock recording participation in test environment');
+      return;
+    }
+
+    try {
+      const serverUrl = process.env.NEXT_PUBLIC_SERVER_URL;
+      if (!serverUrl) {
+        throw new Error('NEXT_PUBLIC_SERVER_URL environment variable is not set');
+      }
+
+      console.log('📡 Recording participation:', {
+        serverUrl,
+        challengeId,
+        walletAddress,
+        transactionHash
+      });
+
+      const response = await fetch(`${serverUrl}/api/challenges/${challengeId}/join`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          walletAddress,
+          transactionHash,
+        }),
+      });
+
+      console.log('📊 Response status:', response.status);
+      console.log('📊 Response ok:', response.ok);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Server error response:', errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log('✅ Participation recorded:', data);
+      
+      return data;
+    } catch (error) {
+      console.error('❌ Failed to record participation:', error);
+      console.error('❌ Error details:', {
+        name: error instanceof Error ? error.name : 'Unknown',
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : 'No stack trace'
+      });
+      throw error;
+    }
+  }, []);
 
   // Complete challenge using MiniKit
   const completeChallenge = useCallback(async (challengeId: number) => {
@@ -489,6 +712,36 @@ export const useMiniKit = (): UseMiniKitReturn => {
     }
   }, [address, isConnected]);
 
+  // Check if user is participating in a challenge
+  const checkParticipation = useCallback(async (challengeId: number, walletAddress: string) => {
+    if (isTestEnvironment) {
+      console.log('🧪 Mock checking participation in test environment');
+      return false; // Always allow joining in test mode
+    }
+
+    try {
+      const serverUrl = process.env.NEXT_PUBLIC_SERVER_URL;
+      if (!serverUrl) {
+        throw new Error('NEXT_PUBLIC_SERVER_URL environment variable is not set');
+      }
+
+      const response = await fetch(`${serverUrl}/api/challenges/${challengeId}/participation/${walletAddress}`);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log('✅ Participation check result:', data);
+      
+      return data.success ? data.data.isParticipating : false;
+    } catch (error) {
+      console.error('❌ Failed to check participation:', error);
+      return false; // Default to false if check fails
+    }
+  }, []);
+
   // Update balance when address changes
   useEffect(() => {
     if (address) {
@@ -501,7 +754,6 @@ export const useMiniKit = (): UseMiniKitReturn => {
     address,
     wldBalance,
     isLoading,
-    getChallengeData,
     getChallengeCounter,
     getChallengeBlockchainData,
     getChallengeDatabaseData,
@@ -510,5 +762,6 @@ export const useMiniKit = (): UseMiniKitReturn => {
     getMultipleCombinedChallengeData,
     joinChallenge,
     completeChallenge,
+    checkParticipation,
   };
 }; 

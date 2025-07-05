@@ -28,13 +28,15 @@ export default function ChallengePage() {
     isLoading: web3Loading,
     getCombinedChallengeData,
     joinChallenge,
-    completeChallenge
+    completeChallenge,
+    checkParticipation
   } = useMiniKit();
 
   const [challenge, setChallenge] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [isJoining, setIsJoining] = useState(false);
   const [hasJoined, setHasJoined] = useState(false);
+  const [isCheckingParticipation, setIsCheckingParticipation] = useState(false);
   const [windowDimensions, setWindowDimensions] = useState({
     width: 375,
     height: 812,
@@ -48,6 +50,20 @@ export default function ChallengePage() {
         const challengeData = await getCombinedChallengeData(challengeId);
         if (challengeData) {
           setChallenge(challengeData);
+          
+          // Check if user has already joined this challenge
+          if (isConnected && address) {
+            setIsCheckingParticipation(true);
+            try {
+              const isParticipating = await checkParticipation(challengeId, address);
+              setHasJoined(isParticipating);
+              console.log(`👤 User participation status for challenge ${challengeId}:`, isParticipating);
+            } catch (error) {
+              console.error('Failed to check participation:', error);
+            } finally {
+              setIsCheckingParticipation(false);
+            }
+          }
         }
       } catch (error) {
         console.error('Failed to load challenge:', error);
@@ -59,7 +75,7 @@ export default function ChallengePage() {
     if (challengeId) {
       loadChallenge();
     }
-  }, [challengeId, getCombinedChallengeData]);
+  }, [challengeId, getCombinedChallengeData, checkParticipation, isConnected, address]);
 
   const handleJoinChallenge = async () => {
     if (!isConnected) {
@@ -73,6 +89,7 @@ export default function ChallengePage() {
       const result = await joinChallenge(challengeId, challenge.entryFee);
       
       if (result.success) {
+        // Update participation status
         setHasJoined(true);
         alert(`Successfully joined "${challenge.title}"! Transaction: ${result.txId}`);
         
@@ -153,7 +170,7 @@ export default function ChallengePage() {
     );
   }
 
-  const canJoin = challenge.isActive && !challenge.isCompleted;
+  const canJoin = challenge.canJoinNow && !challenge.isCompleted;
   const hasEnoughWLD = parseFloat(wldBalance) >= parseFloat(challenge.entryFee);
 
   return (
@@ -197,24 +214,55 @@ export default function ChallengePage() {
             </div>
             
             <p className="text-gray-600 text-sm mb-6">
-              Walk 10,000 steps every day for 7 days straight. Connect your fitness tracker and prove your dedication to healthy living!
+              {challenge.description || 'Complete your health goals to win!'}
             </p>
             
             <div className="space-y-3">
               <h4 className="font-medium text-gray-800 text-sm">Requirements:</h4>
               <div className="space-y-2">
-                <div className="flex items-center gap-3">
-                  <CheckCircle className="w-4 h-4 text-green-500" weight="fill" />
-                  <span className="text-gray-600 text-sm">Walk 10,000+ steps daily</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <CheckCircle className="w-4 h-4 text-green-500" weight="fill" />
-                  <span className="text-gray-600 text-sm">Connect fitness tracker</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <CheckCircle className="w-4 h-4 text-green-500" weight="fill" />
-                  <span className="text-gray-600 text-sm">Complete all 7 days</span>
-                </div>
+                {(challenge.challengeRequirements || challenge.requirements || []).length > 0 ? (
+                  (challenge.challengeRequirements || challenge.requirements || []).map((requirement: string, index: number) => (
+                    <div key={index} className="flex items-center gap-3">
+                      <CheckCircle className="w-4 h-4 text-green-500" weight="fill" />
+                      <span className="text-gray-600 text-sm">{requirement}</span>
+                    </div>
+                  ))
+                ) : (
+                  // Fallback requirements based on challenge type
+                  <>
+                    {challenge.challengeType === 'sleep_efficiency' ? (
+                      <>
+                        <div className="flex items-center gap-3">
+                          <CheckCircle className="w-4 h-4 text-green-500" weight="fill" />
+                          <span className="text-gray-600 text-sm">Achieve {challenge.targetValue || 85}% sleep efficiency</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <CheckCircle className="w-4 h-4 text-green-500" weight="fill" />
+                          <span className="text-gray-600 text-sm">Track sleep for 7 days</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <CheckCircle className="w-4 h-4 text-green-500" weight="fill" />
+                          <span className="text-gray-600 text-sm">Connect Terra fitness tracker</span>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-3">
+                          <CheckCircle className="w-4 h-4 text-green-500" weight="fill" />
+                          <span className="text-gray-600 text-sm">Complete daily health goals</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <CheckCircle className="w-4 h-4 text-green-500" weight="fill" />
+                          <span className="text-gray-600 text-sm">Connect fitness tracker</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <CheckCircle className="w-4 h-4 text-green-500" weight="fill" />
+                          <span className="text-gray-600 text-sm">Maintain consistency</span>
+                        </div>
+                      </>
+                    )}
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -262,26 +310,98 @@ export default function ChallengePage() {
                 <div className="p-2 bg-green-100 rounded-lg w-fit mx-auto mb-3">
                   <CheckCircle className="w-8 h-8 text-green-600" weight="fill" />
                 </div>
-                <h3 className="text-lg font-semibold text-green-700 mb-2">Joined!</h3>
-                <p className="text-green-600 text-sm">You&apos;ve successfully joined this challenge.</p>
+                <h3 className="text-lg font-semibold text-green-700 mb-2">
+                  {challenge.isCurrentlyActive ? 'Challenge Active!' : 'Joined Successfully!'}
+                </h3>
+                <p className="text-green-600 text-sm mb-3">
+                  {challenge.isCurrentlyActive 
+                    ? 'Your sleep metrics are being tracked and counted towards this challenge.'
+                    : challenge.shouldBeCompleted
+                    ? 'Challenge has ended. Results will be announced soon.'
+                    : challenge.entryPeriodClosed
+                    ? 'Entry period closed. Challenge will start soon.'
+                    : 'You\'ve successfully joined this challenge.'
+                  }
+                </p>
+                
+                {/* Challenge Timeline Info */}
+                {challenge.isCurrentlyActive && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Calendar className="w-4 h-4 text-blue-600" />
+                      <span className="text-blue-800 font-medium text-sm">Challenge Period</span>
+                    </div>
+                    <p className="text-blue-700 text-xs">
+                      Started: {new Date(challenge.challengeStartTime).toLocaleDateString()}
+                    </p>
+                    <p className="text-blue-700 text-xs">
+                      Ends: {new Date(challenge.challengeEndTime).toLocaleDateString()}
+                    </p>
+                  </div>
+                )}
+                
+                {challenge.shouldBeCompleted && (
+                  <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 mt-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Trophy className="w-4 h-4 text-purple-600" />
+                      <span className="text-purple-800 font-medium text-sm">Challenge Completed</span>
+                    </div>
+                    <p className="text-purple-700 text-xs">
+                      Winners will be announced soon!
+                    </p>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold text-gray-800">
-                  {challenge.isCompleted ? 'Challenge Completed' : 'Ready to Join?'}
+                  {challenge.isCompleted ? 'Challenge Completed' : 
+                   challenge.entryPeriodClosed ? 'Entry Period Closed' :
+                   challenge.canJoinNow ? 'Ready to Join?' : 'Challenge Upcoming'}
                 </h3>
+                
+                {/* Status Messages */}
+                {challenge.entryPeriodClosed && !challenge.isCompleted && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Warning className="w-4 h-4 text-yellow-600" />
+                      <span className="text-yellow-800 font-medium text-sm">Entry Period Closed</span>
+                    </div>
+                    <p className="text-yellow-700 text-xs">
+                      {challenge.isCurrentlyActive 
+                        ? 'Challenge is currently active. New participants cannot join.'
+                        : 'The entry period for this challenge has ended.'}
+                    </p>
+                  </div>
+                )}
+                
+                {challenge.canJoinNow && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                    <div className="flex items-center gap-2 mb-1">
+                      <CheckCircle className="w-4 h-4 text-green-600" />
+                      <span className="text-green-800 font-medium text-sm">Entry Period Open</span>
+                    </div>
+                    <p className="text-green-700 text-xs">
+                      Join now! Entry closes on {new Date(challenge.entryEndTime).toLocaleDateString()}
+                    </p>
+                  </div>
+                )}
                 
                 <button
                   onClick={handleJoinChallenge}
-                  disabled={!isConnected || !canJoin || !hasEnoughWLD || isJoining || web3Loading}
+                  disabled={!isConnected || !canJoin || !hasEnoughWLD || isJoining || web3Loading || isCheckingParticipation || hasJoined}
                   className={`w-full py-3 rounded-lg font-medium transition-colors ${
-                    isConnected && canJoin && hasEnoughWLD && !isJoining && !web3Loading
+                    isConnected && canJoin && hasEnoughWLD && !isJoining && !web3Loading && !isCheckingParticipation && !hasJoined
                       ? 'bg-green-600 text-white hover:bg-green-700'
                       : 'bg-gray-200 text-gray-500 cursor-not-allowed'
                   }`}
                 >
-                  {isJoining ? 'Joining...' : 
+                  {isCheckingParticipation ? 'Checking participation...' :
+                   isJoining ? 'Joining...' : 
+                   hasJoined ? 'Already Joined' :
                    challenge.isCompleted ? 'Challenge Completed' :
+                   challenge.entryPeriodClosed ? 'Entry Period Closed' :
+                   !hasEnoughWLD ? 'Insufficient WLD Balance' :
                    `Join Challenge (${challenge.entryFee} WLD)`}
                 </button>
               </div>

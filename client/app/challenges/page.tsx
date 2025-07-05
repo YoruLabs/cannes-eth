@@ -26,6 +26,11 @@ export default function ChallengesPage() {
     height: 812,
   });
 
+  // Configuration for which challenges to show
+  const STARTING_CHALLENGE_ID = process.env.NEXT_PUBLIC_STARTING_CHALLENGE_ID 
+    ? parseInt(process.env.NEXT_PUBLIC_STARTING_CHALLENGE_ID) 
+    : 3;
+
   // Check wallet connection before showing challenges
   useEffect(() => {
     const checkWalletConnection = () => {
@@ -51,15 +56,15 @@ export default function ChallengesPage() {
     if (!isCheckingWallet) {
       const loadChallenges = async () => {
         try {
-          console.log('🔍 Loading challenges starting from ID 2...');
+          console.log(`🔍 Loading challenges starting from ID ${STARTING_CHALLENGE_ID}...`);
           
           // Get total challenge count from blockchain
           const totalChallenges = await getChallengeCounter();
           console.log('📊 Total challenges on blockchain:', totalChallenges);
           
-          // Get challenge IDs starting from 2
+          // Get challenge IDs starting from the configured starting ID
           const challengeIds = [];
-          for (let i = 2; i <= totalChallenges; i++) {
+          for (let i = STARTING_CHALLENGE_ID; i <= totalChallenges; i++) {
             challengeIds.push(i);
           }
           
@@ -72,7 +77,7 @@ export default function ChallengesPage() {
             
             setChallenges(challengeData);
           } else {
-            console.log('ℹ️ No challenges found starting from ID 2');
+            console.log(`ℹ️ No challenges found starting from ID ${STARTING_CHALLENGE_ID}`);
             setChallenges([]);
           }
         } catch (error) {
@@ -85,7 +90,7 @@ export default function ChallengesPage() {
 
       loadChallenges();
     }
-  }, [getChallengeCounter, getMultipleCombinedChallengeData, isCheckingWallet]);
+  }, [getChallengeCounter, getMultipleCombinedChallengeData, isCheckingWallet, STARTING_CHALLENGE_ID]);
 
   const getStatusColor = (isActive: boolean, isCompleted: boolean) => {
     if (isCompleted) return 'bg-gray-500 text-white';
@@ -151,7 +156,7 @@ export default function ChallengesPage() {
         width={windowDimensions.width}
       />
 
-      <div className="relative z-2 w-full min-h-screen flex flex-col px-6 pt-16 pb-24">
+      <div className="relative z-2 w-full min-h-screen flex flex-col px-6 pt-16 pb-32">
         {/* Header Section */}
         <div className="w-full mb-8">
           <div className="text-start">
@@ -207,26 +212,32 @@ export default function ChallengesPage() {
                   </div>
 
                   <div className="pt-2 border-t border-gray-200">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 mb-1">
                       <Calendar className="w-4 h-4 text-purple-500" />
-                      <span className="text-gray-600 text-sm">
-                        {challenge.canJoinNow ? '🟢 Can join now!' : 
-                         challenge.isCompleted ? 'Challenge completed' : 
-                         challenge.isActive ? 'Challenge is active' : 'Challenge upcoming'}
+                      <span className="text-gray-600 text-sm font-medium">
+                        {challenge.isCurrentlyActive ? 'Tracking Active' :
+                         challenge.canJoinNow ? 'Entry Open' : 
+                         challenge.entryPeriodClosed ? 'Entry Closed' :
+                         challenge.isCompleted ? 'Completed' : 'Upcoming'}
                       </span>
                     </div>
+                    {challenge.isCurrentlyActive && (
+                      <p className="text-xs text-green-600 ml-6">
+                        Metrics are being tracked for participants
+                      </p>
+                    )}
+                    {challenge.canJoinNow && challenge.entryEndTime && (
+                      <p className="text-xs text-blue-600 ml-6">
+                        Entry closes {new Date(challenge.entryEndTime).toLocaleDateString()}
+                      </p>
+                    )}
+                    {challenge.entryPeriodClosed && !challenge.isCurrentlyActive && !challenge.isCompleted && (
+                      <p className="text-xs text-yellow-600 ml-6">
+                        Challenge will start soon
+                      </p>
+                    )}
                   </div>
 
-                  {/* Sleep Challenge Specific Info */}
-                  {challenge.metricType && (
-                    <div className="pt-2 border-t border-gray-200">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-500">
-                          📊 Sleep Metric: {challenge.metricType} ({challenge.targetValue} {challenge.targetUnit})
-                        </span>
-                      </div>
-                    </div>
-                  )}
                 </div>
 
                 <button
