@@ -19,6 +19,12 @@ export default function HomePage() {
     const checkWalletConnection = () => {
       // Small delay to ensure MiniKit is properly initialized
       setTimeout(() => {
+        // Skip wallet check in test environment
+        if (process.env.NEXT_PUBLIC_APP_ENV === "test") {
+          setIsChecking(false);
+          return;
+        }
+
         if (!MiniKit.isInstalled() || !MiniKit.user?.walletAddress) {
           router.push("/login");
         } else {
@@ -52,7 +58,7 @@ export default function HomePage() {
     );
   }
 
-  // Show home page content (wallet is connected)
+  // Show home page content (wallet is connected or in test environment)
   return (
     <MobileScreen className="relative flex flex-col bg-gradient-to-br from-transparent via-slate-50 to-slate-100 overflow-hidden">
       <FlickeringGrid
@@ -91,10 +97,12 @@ export default function HomePage() {
             <div className="bg-white/80 backdrop-blur-sm border border-gray-200 shadow-xl rounded-2xl p-6 w-full">
               <div className="text-center space-y-3">
                 <h3 className="text-xl font-semibold text-gray-800">
-                  🌟 Wallet Connected
+                  {process.env.NEXT_PUBLIC_APP_ENV === "test" ? "🧪 Test Mode" : "🌟 Wallet Connected"}
                 </h3>
                 <p className="text-gray-600 text-sm">
-                  Your wallet is connected and ready for challenges!
+                  {process.env.NEXT_PUBLIC_APP_ENV === "test" 
+                    ? "Running in test environment" 
+                    : "Your wallet is connected and ready for challenges!"}
                 </p>
                 {MiniKit.user?.walletAddress && (
                   <div className="bg-green-50 rounded-lg p-3">

@@ -29,6 +29,12 @@ export default function ChallengesPage() {
   useEffect(() => {
     const checkWalletConnection = () => {
       setTimeout(() => {
+        // Skip wallet check in test environment
+        if (process.env.NEXT_PUBLIC_APP_ENV === "test") {
+          setIsCheckingWallet(false);
+          return;
+        }
+
         if (!MiniKit.isInstalled() || !MiniKit.user?.walletAddress) {
           router.push("/login");
         } else {

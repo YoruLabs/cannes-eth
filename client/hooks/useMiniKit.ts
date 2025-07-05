@@ -31,16 +31,24 @@ const publicClient = createPublicClient({
   transport: http('https://worldchain-mainnet.g.alchemy.com/public'),
 });
 
+// Check if we're in test environment
+const isTestEnvironment = process.env.NEXT_PUBLIC_APP_ENV === 'test';
+
 export const useMiniKit = (): UseMiniKitReturn => {
   const [isLoading, setIsLoading] = useState(false);
   const [wldBalance, setWldBalance] = useState('0');
 
-  // Get connection state and address directly from MiniKit
-  const isConnected = MiniKit.isInstalled() && !!MiniKit.user?.walletAddress;
-  const address = MiniKit.user?.walletAddress || null;
+  // Get connection state and address - handle test environment
+  const isConnected = isTestEnvironment ? true : (MiniKit.isInstalled() && !!MiniKit.user?.walletAddress);
+  const address = isTestEnvironment ? '0x1234567890123456789012345678901234567890' : (MiniKit.user?.walletAddress || null);
 
   // Get WLD balance
   const getWldBalance = useCallback(async (userAddress: string) => {
+    // Return mock balance in test environment
+    if (isTestEnvironment) {
+      return '10.0';
+    }
+
     try {
       const balance = await publicClient.readContract({
         address: WLD_TOKEN_ADDRESS,
@@ -58,6 +66,23 @@ export const useMiniKit = (): UseMiniKitReturn => {
   // Get challenge data from contract
   const getChallengeData = useCallback(async (challengeId: number) => {
     console.log('🔍 Getting challenge data for ID:', challengeId);
+    
+    // Return mock data in test environment
+    if (isTestEnvironment) {
+      return {
+        id: challengeId,
+        entryFee: '0.01',
+        totalPool: '0.01',
+        participantCount: 1,
+        winnerCount: 1,
+        isActive: false,
+        isCompleted: true,
+        name: `Challenge #${challengeId}`,
+        description: 'Complete your health goals to win!',
+        challengeType: 'health',
+      };
+    }
+
     try {
       const challenge = await publicClient.readContract({
         address: HEALTH_CHALLENGE_ADDRESS,
@@ -96,6 +121,12 @@ export const useMiniKit = (): UseMiniKitReturn => {
   const joinChallenge = useCallback(async (challengeId: number, stakeAmount: string) => {
     if (!isConnected || !address) {
       return { success: false, error: 'Wallet not connected' };
+    }
+
+    // Return mock success in test environment
+    if (isTestEnvironment) {
+      console.log('🧪 Mock joining challenge in test environment');
+      return { success: true, txId: 'mock-tx-id-' + Date.now() };
     }
 
     try {
@@ -185,6 +216,12 @@ export const useMiniKit = (): UseMiniKitReturn => {
   const completeChallenge = useCallback(async (challengeId: number) => {
     if (!isConnected || !address) {
       return { success: false, error: 'Wallet not connected' };
+    }
+
+    // Return mock success in test environment
+    if (isTestEnvironment) {
+      console.log('🧪 Mock completing challenge in test environment');
+      return { success: true, txId: 'mock-complete-tx-id-' + Date.now() };
     }
 
     try {
