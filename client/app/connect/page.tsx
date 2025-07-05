@@ -1,10 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
-import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,10 +16,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import MobileScreen from "@/components/layouts/MobileScreen";
 import { FlickeringGrid } from "@/components/magicui/flickering-grid";
-import { CircleNotch, CheckCircle, XCircle } from "phosphor-react";
+import { CircleNotch, CheckCircle } from "phosphor-react";
 import { cn } from "@/lib/utils";
 import { useUser } from "@/providers/user-provider";
-import { Connection, ConnectionsService } from "@/lib/services/connections";
+import { Connection } from "@/lib/services/connections";
 import { useConnections } from "@/lib/hooks/useConnections";
 
 export default function ConnectPage() {
@@ -31,7 +30,7 @@ export default function ConnectPage() {
   const [ouraAuthUrl, setOuraAuthUrl] = useState("");
   const [whoopAuthUrl, setWhoopAuthUrl] = useState("");
   const [waitingForWebhook, setWaitingForWebhook] = useState(false);
-  const [windowDimensions, setWindowDimensions] = useState({
+  const [windowDimensions] = useState({
     width: 375,
     height: 812,
   });
@@ -50,11 +49,61 @@ export default function ConnectPage() {
     hasAnyConnection
   } = useConnections(user?.wallet_address || null);
 
-  // Handle Terra callback parameters
-  const handleTerraCallback = async () => {
+  // Handle OAuth callback parameters (Terra for Oura, Whoop backend for Whoop)
+  const handleOAuthCallback = useCallback(async () => {
     const urlParams = new URLSearchParams(window.location.search);
 
-    // Check for Terra success parameters
+    // Check for Whoop OAuth callback parameters
+    const whoopCode = urlParams.get("code");
+    const whoopState = urlParams.get("state");
+
+    if (whoopCode && whoopState && user?.wallet_address) {
+      console.log("Whoop OAuth callback: Processing Whoop authentication");
+
+      try {
+        const response = await fetch("/api/whoop/callback", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            code: whoopCode,
+            state: whoopState,
+            wallet_address: user.wallet_address,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.details || `HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        if (data.status === "success") {
+          toast.success("Whoop device connected successfully!");
+          toast.info("Your sleep data has been synced to your account.");
+
+          // Set waiting state
+          setWaitingForWebhook(true);
+
+          // Clean up URL parameters
+          const newUrl = window.location.pathname;
+          window.history.replaceState({}, '', newUrl);
+
+          // Refetch connections after a delay
+          setTimeout(refetchConnections, 2000);
+        } else {
+          throw new Error("Authentication failed");
+        }
+      } catch (error) {
+        console.error("Error handling Whoop callback:", error);
+        toast.error("Failed to complete Whoop connection. Please try again.");
+      }
+      return;
+    }
+
+    // Check for Terra success parameters (for Oura)
     if (
       urlParams.get("terra_success") === "true" ||
       (urlParams.has("user_id") &&
@@ -115,21 +164,22 @@ export default function ConnectPage() {
         toast.error("Connection failed: Missing required parameters");
       }
     }
-  };
+  }, [user, refetchConnections, setWaitingForWebhook]);
 
-  // Handle OAuth redirect results and Terra callback
+  // Handle OAuth redirect results and callbacks
   useEffect(() => {
-    // First check for Terra callback parameters
+    // Check for OAuth callback parameters (Whoop or Terra)
     const urlParams = new URLSearchParams(window.location.search);
 
     if (
-      urlParams.get("terra_success") === "true" ||
+      urlParams.has("code") || // Whoop OAuth callback
+      urlParams.get("terra_success") === "true" || // Terra callback
       (urlParams.has("user_id") &&
         urlParams.has("resource") &&
         urlParams.has("reference_id"))
     ) {
-      // Handle Terra callback
-      handleTerraCallback();
+      // Handle OAuth callback
+      handleOAuthCallback();
     } else {
       // Handle legacy success/failure parameters (fallback)
       const success = searchParams.get("success");
@@ -141,7 +191,7 @@ export default function ConnectPage() {
         toast.error("Failed to connect device. Please try again.");
       }
     }
-  }, [searchParams, user?.wallet_address, refetchConnections]);
+  }, [searchParams, user?.wallet_address, refetchConnections, handleOAuthCallback]);
 
   // Show error toast if there's a connection error
   useEffect(() => {
@@ -160,10 +210,11 @@ export default function ConnectPage() {
   // Poll for connection updates after authentication
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
-    const hasTerraCallback = urlParams.get("terra_success") === "true" ||
+    const hasOAuthCallback = urlParams.has("code") || // Whoop OAuth callback
+      urlParams.get("terra_success") === "true" || // Terra callback
       (urlParams.has("user_id") && urlParams.has("resource") && urlParams.has("reference_id"));
 
-    if (hasTerraCallback && user?.wallet_address) {
+    if (hasOAuthCallback && user?.wallet_address) {
       // Poll for connection updates every 3 seconds for up to 30 seconds
       let pollCount = 0;
       const maxPolls = 10;
@@ -233,15 +284,13 @@ export default function ConnectPage() {
 
     setWhoopLoading(true);
     try {
-      const response = await fetch("/api/terra/whoop", {
+      const response = await fetch("/api/whoop/connect", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          reference_id: user.wallet_address,
-          auth_success_redirect_url: `${process.env.NEXT_PUBLIC_APP_ENV === "development" ? "https://world.org/mini-app?app_id=app_58d87e75f86ee1d5774b836e7190153d&path=/connect" : window.location.origin}/connect?terra_success=true`,
-          auth_failure_redirect_url: `${process.env.NEXT_PUBLIC_APP_ENV === "development" ? "https://world.org/mini-app?app_id=app_58d87e75f86ee1d5774b836e7190153d&path=/connect?success=false" : window.location.origin}/connect?success=false`,
+          wallet_address: user.wallet_address,
         }),
       });
 

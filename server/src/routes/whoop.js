@@ -9,20 +9,109 @@ async function whoopRoutes(fastify, _options) {
   const supabaseService = new SupabaseService();
   const sleepDataProcessor = new SleepDataProcessor();
 
+  // Whoop OAuth initiate endpoint (generates OAuth URL)
+  fastify.post('/auth/initiate', async (request, reply) => {
+    try {
+      const { walletAddress } = request.body;
+
+      if (!walletAddress) {
+        return reply.code(400).send({
+          success: false,
+          error: 'Missing walletAddress',
+        });
+      }
+
+      const clientId = process.env.WHOOP_CLIENT_ID;
+      const ngrokDomain = process.env.NGROK_DOMAIN;
+      const redirectPath = process.env.REDIRECT_PATH || '/connect';
+
+      if (!clientId) {
+        logger.error('Missing Whoop client ID');
+        return reply.code(500).send({
+          success: false,
+          error: 'Missing WHOOP client ID configuration',
+        });
+      }
+
+      if (!ngrokDomain) {
+        logger.error('Missing ngrok domain');
+        return reply.code(500).send({
+          success: false,
+          error: 'Missing NGROK_DOMAIN configuration',
+        });
+      }
+
+      // Build redirect URI from environment variables
+      const redirectUri = `${ngrokDomain}${redirectPath}`;
+
+      logger.info('Initiating Whoop OAuth flow', {
+        walletAddress,
+        redirectUri,
+      });
+
+      // Generate state parameter with wallet address
+      const state = `${walletAddress}_${Date.now()}`;
+
+      // Build OAuth URL
+      const scopes = [
+        "offline",
+        "read:recovery", 
+        "read:cycles",
+        "read:workout",
+        "read:sleep",
+        "read:profile",
+        "read:body_measurement"
+      ].join(" ");
+
+      const authUrl = new URL("https://api.prod.whoop.com/oauth/oauth2/auth");
+      authUrl.searchParams.set("response_type", "code");
+      authUrl.searchParams.set("client_id", clientId);
+      authUrl.searchParams.set("redirect_uri", redirectUri);
+      authUrl.searchParams.set("scope", scopes);
+      authUrl.searchParams.set("state", state);
+
+      logger.info('Generated Whoop OAuth URL', {
+        walletAddress,
+        state,
+        redirectUri,
+      });
+
+      return {
+        success: true,
+        auth_url: authUrl.toString(),
+        redirect_uri: redirectUri,
+        state: state,
+      };
+    } catch (error) {
+      logger.error('Error initiating Whoop OAuth flow', {
+        error: error.message,
+        walletAddress: request.body?.walletAddress,
+      });
+
+      return reply.code(500).send({
+        success: false,
+        error: 'Failed to initiate OAuth flow',
+        details: error.message,
+      });
+    }
+  });
+
   // Whoop OAuth token exchange endpoint
   fastify.post('/auth/token', async (request, reply) => {
     try {
-      const { code, redirectUri } = request.body;
+      const { code } = request.body;
 
-      if (!code || !redirectUri) {
+      if (!code) {
         return reply.code(400).send({
           success: false,
-          error: 'Missing code or redirectUri',
+          error: 'Missing code',
         });
       }
 
       const clientId = process.env.WHOOP_CLIENT_ID;
       const clientSecret = process.env.WHOOP_CLIENT_SECRET;
+      const ngrokDomain = process.env.NGROK_DOMAIN;
+      const redirectPath = process.env.REDIRECT_PATH || '/connect';
 
       if (!clientId || !clientSecret) {
         logger.error('Missing Whoop client credentials');
@@ -31,6 +120,17 @@ async function whoopRoutes(fastify, _options) {
           error: 'Missing WHOOP client credentials',
         });
       }
+
+      if (!ngrokDomain) {
+        logger.error('Missing ngrok domain');
+        return reply.code(500).send({
+          success: false,
+          error: 'Missing NGROK_DOMAIN configuration',
+        });
+      }
+
+      // Build redirect URI from environment variables
+      const redirectUri = `${ngrokDomain}${redirectPath}`;
 
       logger.info('Exchanging Whoop OAuth code for token', {
         codeLength: code.length,

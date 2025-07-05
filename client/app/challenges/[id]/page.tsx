@@ -14,7 +14,7 @@ import {
   SignOut
 } from "phosphor-react";
 import NavBar from "../../../components/layouts/NavBar";
-import { useWeb3 } from "../../../hooks/useWeb3";
+import { useWeb3 } from "@/lib/hooks/useWeb3";
 
 export default function ChallengePage() {
   const params = useParams();

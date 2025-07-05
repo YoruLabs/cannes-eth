@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Trophy, Users, Coins } from "phosphor-react";
-import { useWeb3 } from "../../hooks/useWeb3";
+import { useWeb3 } from "@/lib/hooks/useWeb3";
 
 export default function ChallengesPage() {
   const router = useRouter();

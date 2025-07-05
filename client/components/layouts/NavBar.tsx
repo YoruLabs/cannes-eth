@@ -48,12 +48,6 @@ export default function NavBar({
     {
       icon: User,
       label: "Profile",
-      path: "/whoop",
-      isActive: pathname === "/whoop",
-    },
-    {
-      icon: User,
-      label: "Profile",
       path: "/hypergraph",
       isActive: pathname === "/hypergraph",
     },
@@ -79,15 +73,13 @@ export default function NavBar({
                 key={item.path}
                 onClick={() => handleNavigation(item.path)}
                 className={`relative flex items-center justify-center w-12 h-12 rounded-full transition-all
-                duration-300 ease-out transform hover:scale-110 active:scale-95 ${
-                item.isActive
+                duration-300 ease-out transform hover:scale-110 active:scale-95 ${item.isActive
                     ? "bg-gray-500 text-white shadow-lg shadow-gray-500/30"
                     : "text-gray-500 hover:text-gray-600 hover:bg-gray-50"
-                }`}
+                  }`}
               >
                 <Icon
-                  className={`w-6 h-6 transition-all duration-200 ${
-                  item.isActive ? "text-white" : "text-gray-500" }`}
+                  className={`w-6 h-6 transition-all duration-200 ${item.isActive ? "text-white" : "text-gray-500"}`}
                   weight={item.isActive ? "fill" : "regular"}
                 />
 
