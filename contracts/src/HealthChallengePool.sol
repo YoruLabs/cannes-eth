@@ -1,0 +1,309 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
+
+/**
+ * @title HealthChallengePool
+ * @dev A contract for health challenges where users stake WLD tokens and winners share the prize pool
+ */
+contract HealthChallengePool is ReentrancyGuard, Ownable {
+    using SafeERC20 for IERC20;
+    using ECDSA for bytes32;
+
+    // WLD Token contract
+    IERC20 public immutable wldToken;
+    
+    // Backend signer address for verification
+    address public backendSigner;
+    
+    // Challenge counter
+    uint256 public challengeCounter;
+    
+    // Challenge struct
+    struct Challenge {
+        uint256 id;
+        string name;
+        string description;
+        string challengeType; // "steps", "sleep", "heart_rate", etc.
+        uint256 entryFee; // WLD tokens required to enter
+        uint256 startTime;
+        uint256 endTime;
+        uint256 totalPool; // Total WLD staked
+        uint256 participantCount;
+        bool isActive;
+        bool isCompleted;
+        uint256 winnerCount;
+        mapping(address => bool) participants;
+        mapping(address => bool) winners;
+        address[] participantList;
+        address[] winnerList;
+    }
+    
+    // Mapping from challenge ID to challenge
+    mapping(uint256 => Challenge) public challenges;
+    
+    // User participation tracking
+    mapping(address => uint256[]) public userChallenges;
+    
+    // Events
+    event ChallengeCreated(
+        uint256 indexed challengeId,
+        string name,
+        string challengeType,
+        uint256 entryFee,
+        uint256 startTime,
+        uint256 endTime
+    );
+    
+    event UserJoinedChallenge(
+        uint256 indexed challengeId,
+        address indexed user,
+        uint256 amount
+    );
+    
+    event ChallengeCompleted(
+        uint256 indexed challengeId,
+        uint256 winnerCount,
+        uint256 prizePerWinner
+    );
+    
+    event WinnerVerified(
+        uint256 indexed challengeId,
+        address indexed winner,
+        uint256 prize
+    );
+    
+    event BackendSignerUpdated(address indexed oldSigner, address indexed newSigner);
+    
+    constructor(address _wldToken, address _backendSigner) Ownable(msg.sender) {
+        require(_wldToken != address(0), "Invalid WLD token address");
+        require(_backendSigner != address(0), "Invalid backend signer address");
+        
+        wldToken = IERC20(_wldToken);
+        backendSigner = _backendSigner;
+    }
+    
+    /**
+     * @dev Create a new health challenge
+     */
+    function createChallenge(
+        string memory _name,
+        string memory _description,
+        string memory _challengeType,
+        uint256 _entryFee,
+        uint256 _startTime,
+        uint256 _endTime
+    ) external onlyOwner {
+        require(_startTime > block.timestamp, "Start time must be in the future");
+        require(_endTime > _startTime, "End time must be after start time");
+        require(_entryFee > 0, "Entry fee must be greater than 0");
+        
+        challengeCounter++;
+        
+        Challenge storage newChallenge = challenges[challengeCounter];
+        newChallenge.id = challengeCounter;
+        newChallenge.name = _name;
+        newChallenge.description = _description;
+        newChallenge.challengeType = _challengeType;
+        newChallenge.entryFee = _entryFee;
+        newChallenge.startTime = _startTime;
+        newChallenge.endTime = _endTime;
+        newChallenge.isActive = true;
+        newChallenge.isCompleted = false;
+        
+        emit ChallengeCreated(
+            challengeCounter,
+            _name,
+            _challengeType,
+            _entryFee,
+            _startTime,
+            _endTime
+        );
+    }
+    
+    /**
+     * @dev Join a challenge by staking WLD tokens
+     */
+    function joinChallenge(uint256 _challengeId) external nonReentrant {
+        Challenge storage challenge = challenges[_challengeId];
+        
+        require(challenge.isActive, "Challenge is not active");
+        require(!challenge.isCompleted, "Challenge is already completed");
+        require(block.timestamp < challenge.startTime, "Challenge has already started");
+        require(!challenge.participants[msg.sender], "Already joined this challenge");
+        
+        // Transfer WLD tokens from user to contract
+        wldToken.safeTransferFrom(msg.sender, address(this), challenge.entryFee);
+        
+        // Add user to challenge
+        challenge.participants[msg.sender] = true;
+        challenge.participantList.push(msg.sender);
+        challenge.participantCount++;
+        challenge.totalPool += challenge.entryFee;
+        
+        // Track user's challenges
+        userChallenges[msg.sender].push(_challengeId);
+        
+        emit UserJoinedChallenge(_challengeId, msg.sender, challenge.entryFee);
+    }
+    
+    /**
+     * @dev Verify challenge completion and distribute prizes
+     * @param _challengeId The challenge ID
+     * @param _winners Array of winner addresses
+     * @param _signature Backend signature verifying the winners
+     */
+    function verifyAndDistributePrizes(
+        uint256 _challengeId,
+        address[] calldata _winners,
+        bytes calldata _signature
+    ) external nonReentrant {
+        Challenge storage challenge = challenges[_challengeId];
+        
+        require(challenge.isActive, "Challenge is not active");
+        require(!challenge.isCompleted, "Challenge already completed");
+        require(block.timestamp > challenge.endTime, "Challenge not yet ended");
+        require(_winners.length > 0, "No winners provided");
+        
+        // Verify signature
+        bytes32 messageHash = keccak256(abi.encodePacked(_challengeId, _winners));
+        bytes32 ethSignedMessageHash = MessageHashUtils.toEthSignedMessageHash(messageHash);
+        address recoveredSigner = ECDSA.recover(ethSignedMessageHash, _signature);
+        
+        require(recoveredSigner == backendSigner, "Invalid signature");
+        
+        // Verify all winners are participants
+        for (uint256 i = 0; i < _winners.length; i++) {
+            require(challenge.participants[_winners[i]], "Winner not a participant");
+            require(!challenge.winners[_winners[i]], "Winner already processed");
+        }
+        
+        // Calculate prize per winner
+        uint256 prizePerWinner = challenge.totalPool / _winners.length;
+        
+        // Mark challenge as completed
+        challenge.isCompleted = true;
+        challenge.winnerCount = _winners.length;
+        
+        // Distribute prizes
+        for (uint256 i = 0; i < _winners.length; i++) {
+            address winner = _winners[i];
+            challenge.winners[winner] = true;
+            challenge.winnerList.push(winner);
+            
+            // Transfer prize to winner
+            wldToken.safeTransfer(winner, prizePerWinner);
+            
+            emit WinnerVerified(_challengeId, winner, prizePerWinner);
+        }
+        
+        emit ChallengeCompleted(_challengeId, _winners.length, prizePerWinner);
+    }
+    
+    /**
+     * @dev Cancel a challenge (only before it starts)
+     */
+    function cancelChallenge(uint256 _challengeId) external onlyOwner {
+        Challenge storage challenge = challenges[_challengeId];
+        
+        require(challenge.isActive, "Challenge is not active");
+        require(!challenge.isCompleted, "Challenge already completed");
+        require(block.timestamp < challenge.startTime, "Challenge has already started");
+        
+        challenge.isActive = false;
+        
+        // Refund all participants
+        for (uint256 i = 0; i < challenge.participantList.length; i++) {
+            address participant = challenge.participantList[i];
+            wldToken.safeTransfer(participant, challenge.entryFee);
+        }
+    }
+    
+    /**
+     * @dev Update backend signer address
+     */
+    function updateBackendSigner(address _newSigner) external onlyOwner {
+        require(_newSigner != address(0), "Invalid signer address");
+        
+        address oldSigner = backendSigner;
+        backendSigner = _newSigner;
+        
+        emit BackendSignerUpdated(oldSigner, _newSigner);
+    }
+    
+    /**
+     * @dev Get challenge details
+     */
+    function getChallengeDetails(uint256 _challengeId) external view returns (
+        uint256 id,
+        string memory name,
+        string memory description,
+        string memory challengeType,
+        uint256 entryFee,
+        uint256 startTime,
+        uint256 endTime,
+        uint256 totalPool,
+        uint256 participantCount,
+        bool isActive,
+        bool isCompleted,
+        uint256 winnerCount
+    ) {
+        Challenge storage challenge = challenges[_challengeId];
+        
+        return (
+            challenge.id,
+            challenge.name,
+            challenge.description,
+            challenge.challengeType,
+            challenge.entryFee,
+            challenge.startTime,
+            challenge.endTime,
+            challenge.totalPool,
+            challenge.participantCount,
+            challenge.isActive,
+            challenge.isCompleted,
+            challenge.winnerCount
+        );
+    }
+    
+    /**
+     * @dev Get challenge participants
+     */
+    function getChallengeParticipants(uint256 _challengeId) external view returns (address[] memory) {
+        return challenges[_challengeId].participantList;
+    }
+    
+    /**
+     * @dev Get challenge winners
+     */
+    function getChallengeWinners(uint256 _challengeId) external view returns (address[] memory) {
+        return challenges[_challengeId].winnerList;
+    }
+    
+    /**
+     * @dev Check if user is participant in challenge
+     */
+    function isParticipant(uint256 _challengeId, address _user) external view returns (bool) {
+        return challenges[_challengeId].participants[_user];
+    }
+    
+    /**
+     * @dev Check if user is winner in challenge
+     */
+    function isWinner(uint256 _challengeId, address _user) external view returns (bool) {
+        return challenges[_challengeId].winners[_user];
+    }
+    
+    /**
+     * @dev Get user's challenge history
+     */
+    function getUserChallenges(address _user) external view returns (uint256[] memory) {
+        return userChallenges[_user];
+    }
+} 

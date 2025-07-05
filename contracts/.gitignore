@@ -1,0 +1,115 @@
+# Environment variables and secrets
+.env
+.env.local
+.env.*.local
+*.env
+
+# Private keys and sensitive data
+*.key
+*.pem
+private_keys/
+secrets/
+keystore/
+
+# Foundry build artifacts
+out/
+cache/
+cache_forge/
+cache_hardhat/
+broadcast/
+artifacts/
+
+# Foundry dependencies (git submodules are preferred)
+lib/
+
+# Node.js dependencies (if using any)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.vim/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+.tmp/
+
+# Coverage reports
+coverage/
+*.lcov
+coverage.json
+lcov.info
+
+# Gas reports
+.gas-snapshot
+gas-report.txt
+
+# Solidity compiler cache
+.solhint.json
+.prettier*
+.eslint*
+
+# Testing artifacts
+test-results/
+.nyc_output/
+
+# Deployment artifacts (keep commented if you want to track deployments)
+# deployments/
+# artifacts/
+
+# Remix IDE
+.deps/
+contracts/artifacts/
+
+# Hardhat (if mixed usage)
+typechain/
+typechain-types/
+
+# Local development
+.local/
+local/
+
+# Documentation build
+docs/build/
+site/
+
+# Python (if using any)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Lock files for dependencies
+*.lock 
