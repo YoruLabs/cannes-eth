@@ -9,7 +9,7 @@ interface GlobalLayoutProps {
 }
 
 // Pages that should show the bottom navigation
-const AUTHENTICATED_PAGES = ["/", "/hypergraph", "/connect", "/profile"];
+const AUTHENTICATED_PAGES = ["/", "/stats", "/connect", "/profile"];
 
 export default function GlobalLayout({ children }: GlobalLayoutProps) {
   const { user, isLoading } = useUser();
