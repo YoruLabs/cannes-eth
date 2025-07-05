@@ -12,11 +12,6 @@ class SleepDataProcessor {
     try {
       logger.info('Processing sleep data for user', { userId });
 
-      const sessionId = this.generateSessionId(
-        userId,
-        terraData.metadata.start_time
-      );
-
       // Calculate total sleep duration
       const totalSleepDuration = this.calculateTotalSleepDuration(
         terraData.sleep_durations_data
@@ -40,7 +35,6 @@ class SleepDataProcessor {
       // Create consolidated metrics object
       const processedMetrics = {
         user_id: userId,
-        session_id: sessionId,
         start_time: terraData.metadata.start_time,
         end_time: terraData.metadata.end_time,
         total_sleep_duration_seconds: Math.round(totalSleepDuration),
@@ -65,21 +59,35 @@ class SleepDataProcessor {
         wake_up_latency_seconds: Math.round(
           terraData.sleep_durations_data.awake.wake_up_latency_seconds
         ),
-        avg_heart_rate_bpm: Math.round(heartRateMetrics.avgHeartRate),
-        resting_heart_rate_bpm: Math.round(heartRateMetrics.restingHeartRate),
-        avg_hrv_rmssd: Math.round(heartRateMetrics.avgHrvRmssd),
-        avg_hrv_sdnn: Math.round(heartRateMetrics.avgHrvSdnn),
-        avg_oxygen_saturation: Math.round(
-          respirationMetrics.avgOxygenSaturation
-        ),
-        avg_breathing_rate: Math.round(respirationMetrics.avgBreathingRate),
-        snoring_duration_seconds: Math.round(
-          respirationMetrics.snoringDuration
-        ),
-        temperature_delta: terraData.temperature_data.delta,
-        readiness_score: Math.round(terraData.readiness_data.readiness),
+        avg_heart_rate_bpm: heartRateMetrics.avgHeartRate
+          ? Math.round(heartRateMetrics.avgHeartRate)
+          : null,
+        resting_heart_rate_bpm: heartRateMetrics.restingHeartRate
+          ? Math.round(heartRateMetrics.restingHeartRate)
+          : null,
+        avg_hrv_rmssd: heartRateMetrics.avgHrvRmssd
+          ? Math.round(heartRateMetrics.avgHrvRmssd)
+          : null,
+        avg_hrv_sdnn: heartRateMetrics.avgHrvSdnn
+          ? Math.round(heartRateMetrics.avgHrvSdnn)
+          : null,
+        avg_oxygen_saturation: respirationMetrics.avgOxygenSaturation
+          ? Math.round(respirationMetrics.avgOxygenSaturation)
+          : null,
+        avg_breathing_rate: respirationMetrics.avgBreathingRate
+          ? Math.round(respirationMetrics.avgBreathingRate)
+          : null,
+        snoring_duration_seconds: respirationMetrics.snoringDuration
+          ? Math.round(respirationMetrics.snoringDuration)
+          : null,
+        temperature_delta: terraData.temperature_data.delta || null,
+        readiness_score: terraData.readiness_data.readiness
+          ? Math.round(terraData.readiness_data.readiness)
+          : null,
         recovery_level: Math.round(terraData.readiness_data.recovery_level),
-        sleep_score: Math.round(terraData.scores.sleep),
+        sleep_score: terraData.scores.sleep
+          ? Math.round(terraData.scores.sleep)
+          : null,
         created_at: new Date().toISOString(),
       };
 
@@ -89,7 +97,6 @@ class SleepDataProcessor {
 
       logger.info('Successfully processed sleep data', {
         userId,
-        sessionId,
         totalSleepDuration,
         sleepEfficiency,
       });
@@ -106,14 +113,6 @@ class SleepDataProcessor {
   }
 
   /**
-   * Generate a unique session ID for the sleep session
-   */
-  static generateSessionId(userId, startTime) {
-    const timestamp = new Date(startTime).getTime();
-    return `${userId}_${timestamp}`;
-  }
-
-  /**
    * Calculate total sleep duration in seconds
    */
   static calculateTotalSleepDuration(sleepDurationsData) {
@@ -127,12 +126,12 @@ class SleepDataProcessor {
    */
   static extractHeartRateMetrics(heartRateData) {
     return {
-      avgHeartRate: heartRateData.summary.avg_hr_bpm,
-      restingHeartRate: heartRateData.summary.resting_hr_bpm,
-      avgHrvRmssd: heartRateData.summary.avg_hrv_rmssd,
-      avgHrvSdnn: heartRateData.summary.avg_hrv_sdnn,
-      minHeartRate: heartRateData.summary.min_hr_bpm,
-      maxHeartRate: heartRateData.summary.max_hr_bpm,
+      avgHeartRate: heartRateData.summary.avg_hr_bpm || null,
+      restingHeartRate: heartRateData.summary.resting_hr_bpm || null,
+      avgHrvRmssd: heartRateData.summary.avg_hrv_rmssd || null,
+      avgHrvSdnn: heartRateData.summary.avg_hrv_sdnn || null,
+      minHeartRate: heartRateData.summary.min_hr_bpm || null,
+      maxHeartRate: heartRateData.summary.max_hr_bpm || null,
     };
   }
 
@@ -142,11 +141,11 @@ class SleepDataProcessor {
   static extractRespirationMetrics(respirationData) {
     return {
       avgOxygenSaturation:
-        respirationData.oxygen_saturation_data.avg_saturation_percentage,
-      avgBreathingRate: respirationData.breaths_data.avg_breaths_per_min,
+        respirationData.oxygen_saturation_data.avg_saturation_percentage || null,
+      avgBreathingRate: respirationData.breaths_data.avg_breaths_per_min || null,
       snoringDuration:
-        respirationData.snoring_data.total_snoring_duration_seconds,
-      snoringEvents: respirationData.snoring_data.num_snoring_events,
+        respirationData.snoring_data.total_snoring_duration_seconds || null,
+      snoringEvents: respirationData.snoring_data.num_snoring_events || null,
     };
   }
 
@@ -162,7 +161,7 @@ class SleepDataProcessor {
       remSleepDuration:
         sleepDurationsData.asleep.duration_REM_sleep_state_seconds,
       awakeDuration: sleepDurationsData.awake.duration_awake_state_seconds,
-      remEvents: sleepDurationsData.asleep.num_REM_events,
+      remEvents: sleepDurationsData.asleep.num_REM_events || 0,
       wakeupEvents: sleepDurationsData.awake.num_wakeup_events,
     };
   }
@@ -224,8 +223,10 @@ class SleepDataProcessor {
    * Calculate recovery score based on HRV and readiness
    */
   static calculateRecoveryScore(metrics) {
-    const hrvScore = Math.min(100, (metrics.avg_hrv_rmssd / 100) * 100);
-    const readinessScore = metrics.readiness_score;
+    const hrvScore = metrics.avg_hrv_rmssd
+      ? Math.min(100, (metrics.avg_hrv_rmssd / 100) * 100)
+      : 0;
+    const readinessScore = metrics.readiness_score || 0;
 
     return hrvScore * 0.6 + readinessScore * 0.4;
   }
@@ -242,14 +243,20 @@ class SleepDataProcessor {
    */
   static calculateHealthScore(metrics) {
     const factors = {
-      heartRate:
-        Math.max(0, 100 - Math.abs(metrics.avg_heart_rate_bpm - 60) * 2) * 0.25,
-      oxygenSaturation:
-        Math.max(0, metrics.avg_oxygen_saturation - 90) * 10 * 0.25,
-      breathingRate:
-        Math.max(0, 100 - Math.abs(metrics.avg_breathing_rate - 12) * 5) * 0.25,
-      snoring:
-        Math.max(0, 100 - (metrics.snoring_duration_seconds / 60) * 10) * 0.25,
+      heartRate: metrics.avg_heart_rate_bpm
+        ? Math.max(0, 100 - Math.abs(metrics.avg_heart_rate_bpm - 60) * 2) *
+          0.25
+        : 0,
+      oxygenSaturation: metrics.avg_oxygen_saturation
+        ? Math.max(0, metrics.avg_oxygen_saturation - 90) * 10 * 0.25
+        : 0,
+      breathingRate: metrics.avg_breathing_rate
+        ? Math.max(0, 100 - Math.abs(metrics.avg_breathing_rate - 12) * 5) *
+          0.25
+        : 0,
+      snoring: metrics.snoring_duration_seconds
+        ? Math.max(0, 100 - (metrics.snoring_duration_seconds / 60) * 10) * 0.25
+        : 0,
     };
 
     return Object.values(factors).reduce((sum, score) => sum + score, 0);

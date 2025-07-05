@@ -1,9 +1,9 @@
 import { supabase } from '@/lib/supabase/client';
 
 export interface Connection {
-  id: string;
-  provider: string;
-  reference_id: string;
+  id: string; // Terra user ID
+  provider: string; // OURA, WHOOP, etc.
+  reference_id: string; // Wallet address
   active: boolean;
   last_webhook_update: string | null;
   created_at: string;
@@ -18,6 +18,10 @@ export interface ConnectionStatus {
 export class ConnectionsService {
   /**
    * Create a new connection record
+   * 
+   * NOTE: This method is no longer used for creating connections.
+   * Connections are now created by the Fastify server via webhooks.
+   * This method is kept for backward compatibility and testing.
    */
   static async createConnection(
     terraUserId: string,
@@ -52,6 +56,10 @@ export class ConnectionsService {
 
   /**
    * Update or create connection record (upsert)
+   * 
+   * NOTE: This method is no longer used for creating connections.
+   * Connections are now created by the Fastify server via webhooks.
+   * This method is kept for backward compatibility and testing.
    */
   static async upsertConnection(
     terraUserId: string,

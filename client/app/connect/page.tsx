@@ -30,19 +30,20 @@ export default function ConnectPage() {
   const [whoopDialogOpen, setWhoopDialogOpen] = useState(false);
   const [ouraAuthUrl, setOuraAuthUrl] = useState("");
   const [whoopAuthUrl, setWhoopAuthUrl] = useState("");
+  const [waitingForWebhook, setWaitingForWebhook] = useState(false);
   const [windowDimensions, setWindowDimensions] = useState({
     width: 375,
     height: 812,
   });
-  
+
   const searchParams = useSearchParams();
   const { user } = useUser();
-  
+
   // Use the custom hook for connections
-  const { 
-    connections, 
-    loading: connectionsLoading, 
-    error: connectionsError, 
+  const {
+    connections,
+    loading: connectionsLoading,
+    error: connectionsError,
     refetch: refetchConnections,
     hasOuraConnection,
     hasWhoopConnection,
@@ -52,7 +53,7 @@ export default function ConnectPage() {
   // Handle Terra callback parameters
   const handleTerraCallback = async () => {
     const urlParams = new URLSearchParams(window.location.search);
-    
+
     // Check for Terra success parameters
     if (
       urlParams.get("terra_success") === "true" ||
@@ -82,24 +83,25 @@ export default function ConnectPage() {
         // Verify that the reference_id matches our user's wallet address
         if (referenceId === user.wallet_address) {
           try {
-            console.log("Creating connection record...");
-            await ConnectionsService.upsertConnection(
-              terraUserId,
-              terraResource,
-              referenceId
-            );
-            
+            // Note: We don't create connection records here anymore
+            // The Fastify server will handle this via webhooks
+            console.log("Terra authentication successful - waiting for webhook...");
+
             toast.success(`${terraResource} device connected successfully!`);
-            
+            toast.info("Your historical sleep data will be synced automatically via webhooks. This may take some time.");
+
+            // Set waiting state
+            setWaitingForWebhook(true);
+
             // Clean up URL parameters
             const newUrl = window.location.pathname;
             window.history.replaceState({}, '', newUrl);
-            
-            // Refetch connections
-            refetchConnections();
+
+            // Refetch connections after a delay to allow webhook processing
+            setTimeout(refetchConnections, 2000);
           } catch (error) {
-            console.error("Error creating connection:", error);
-            toast.error("Failed to save connection. Please try again.");
+            console.error("Error handling Terra callback:", error);
+            toast.error("Connection successful but there was an issue. Please refresh the page.");
           }
         } else {
           console.error("Reference ID mismatch:", {
@@ -119,7 +121,7 @@ export default function ConnectPage() {
   useEffect(() => {
     // First check for Terra callback parameters
     const urlParams = new URLSearchParams(window.location.search);
-    
+
     if (
       urlParams.get("terra_success") === "true" ||
       (urlParams.has("user_id") &&
@@ -129,11 +131,12 @@ export default function ConnectPage() {
       // Handle Terra callback
       handleTerraCallback();
     } else {
-      // Handle legacy success/failure parameters
+      // Handle legacy success/failure parameters (fallback)
       const success = searchParams.get("success");
       if (success === "true") {
         toast.success("Device connected successfully!");
-        setTimeout(refetchConnections, 1000);
+        toast.info("Your historical sleep data will be synced automatically via webhooks. This may take some time.");
+        setTimeout(refetchConnections, 2000);
       } else if (success === "false") {
         toast.error("Failed to connect device. Please try again.");
       }
@@ -146,6 +149,38 @@ export default function ConnectPage() {
       toast.error(`Failed to load connections: ${connectionsError}`);
     }
   }, [connectionsError]);
+
+  // Clear waiting state when connections are loaded
+  useEffect(() => {
+    if (!connectionsLoading && hasAnyConnection && waitingForWebhook) {
+      setWaitingForWebhook(false);
+    }
+  }, [connectionsLoading, hasAnyConnection, waitingForWebhook]);
+
+  // Poll for connection updates after authentication
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const hasTerraCallback = urlParams.get("terra_success") === "true" ||
+      (urlParams.has("user_id") && urlParams.has("resource") && urlParams.has("reference_id"));
+
+    if (hasTerraCallback && user?.wallet_address) {
+      // Poll for connection updates every 3 seconds for up to 30 seconds
+      let pollCount = 0;
+      const maxPolls = 10;
+      const pollInterval = setInterval(() => {
+        pollCount++;
+        refetchConnections();
+
+        if (pollCount >= maxPolls) {
+          clearInterval(pollInterval);
+          setWaitingForWebhook(false);
+          console.log("Stopped polling for connection updates");
+        }
+      }, 3000);
+
+      return () => clearInterval(pollInterval);
+    }
+  }, [user?.wallet_address, refetchConnections]);
 
   const handleOuraConnect = async () => {
     if (!user?.wallet_address) {
@@ -162,7 +197,7 @@ export default function ConnectPage() {
         },
         body: JSON.stringify({
           reference_id: user.wallet_address,
-          auth_success_redirect_url: `${process.env.NEXT_PUBLIC_APP_ENV === "development" ? "https://world.org/mini-app?app_id=app_58d87e75f86ee1d5774b836e7190153d&path=/connect" : window.location.origin}/connect`,
+          auth_success_redirect_url: `${process.env.NEXT_PUBLIC_APP_ENV === "development" ? "https://world.org/mini-app?app_id=app_58d87e75f86ee1d5774b836e7190153d&path=/connect" : window.location.origin}/connect?terra_success=true`,
           auth_failure_redirect_url: `${process.env.NEXT_PUBLIC_APP_ENV === "development" ? "https://world.org/mini-app?app_id=app_58d87e75f86ee1d5774b836e7190153d&path=/connect?success=false" : window.location.origin}/connect?success=false`,
         }),
       });
@@ -175,7 +210,7 @@ export default function ConnectPage() {
       }
 
       const data = await response.json();
-      
+
       if (data.status === "success" && data.auth_url) {
         setOuraAuthUrl(data.auth_url);
         setOuraDialogOpen(true);
@@ -205,7 +240,7 @@ export default function ConnectPage() {
         },
         body: JSON.stringify({
           reference_id: user.wallet_address,
-          auth_success_redirect_url: `${process.env.NEXT_PUBLIC_APP_ENV === "development" ? "https://world.org/mini-app?app_id=app_58d87e75f86ee1d5774b836e7190153d&path=/connect" : window.location.origin}/connect`,
+          auth_success_redirect_url: `${process.env.NEXT_PUBLIC_APP_ENV === "development" ? "https://world.org/mini-app?app_id=app_58d87e75f86ee1d5774b836e7190153d&path=/connect" : window.location.origin}/connect?terra_success=true`,
           auth_failure_redirect_url: `${process.env.NEXT_PUBLIC_APP_ENV === "development" ? "https://world.org/mini-app?app_id=app_58d87e75f86ee1d5774b836e7190153d&path=/connect?success=false" : window.location.origin}/connect?success=false`,
         }),
       });
@@ -218,7 +253,7 @@ export default function ConnectPage() {
       }
 
       const data = await response.json();
-      
+
       if (data.status === "success" && data.auth_url) {
         setWhoopAuthUrl(data.auth_url);
         setWhoopDialogOpen(true);
@@ -255,7 +290,7 @@ export default function ConnectPage() {
     }
   ) => {
     const isConnected = connection && connection.active;
-    const isDisabled = isLoading || ouraLoading || whoopLoading;
+    const isDisabled = isLoading || ouraLoading || whoopLoading || waitingForWebhook;
 
     return (
       <button
@@ -267,8 +302,8 @@ export default function ConnectPage() {
           isDisabled && !isConnected
             ? "bg-gray-300 text-gray-500 cursor-not-allowed"
             : isConnected
-            ? "bg-gradient-to-r from-green-500 to-green-600 text-white shadow-green-500/30"
-            : `${colors.gradient} text-white ${colors.shadow}`
+              ? "bg-gradient-to-r from-green-500 to-green-600 text-white shadow-green-500/30"
+              : `${colors.gradient} text-white ${colors.shadow}`
         )}
       >
         {isLoading ? (
@@ -307,7 +342,7 @@ export default function ConnectPage() {
         height={windowDimensions.height}
         width={windowDimensions.width}
       />
-      
+
       <div className="relative z-2 w-full min-h-screen flex flex-col px-6 pt-16 pb-8">
         {/* Header Section */}
         <div className="w-full mb-8">
@@ -318,10 +353,18 @@ export default function ConnectPage() {
         </div>
 
         {/* Connection Status Loading */}
-        {connectionsLoading && (
+        {connectionsLoading && !waitingForWebhook && (
           <div className="w-full max-w-md mx-auto mb-4 flex items-center justify-center gap-2 text-gray-600">
             <CircleNotch className="w-4 h-4 animate-spin" />
             <span>Loading connection status...</span>
+          </div>
+        )}
+
+        {/* Waiting for Webhook */}
+        {waitingForWebhook && (
+          <div className="w-full max-w-md mx-auto mb-4 flex items-center justify-center gap-2 text-blue-600">
+            <CircleNotch className="w-4 h-4 animate-spin" />
+            <span>Processing connection...</span>
           </div>
         )}
 

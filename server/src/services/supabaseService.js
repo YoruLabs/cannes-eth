@@ -18,7 +18,7 @@ class SupabaseService {
     try {
       logger.info('Storing sleep metrics in Supabase', {
         userId: sleepMetrics.user_id,
-        sessionId: sleepMetrics.session_id,
+        startTime: sleepMetrics.start_time,
       });
 
       // Log the exact payload for debugging
@@ -35,7 +35,7 @@ class SupabaseService {
 
       const { data, error } = await this.supabase
         .from('sleep_metrics')
-        .insert([sleepMetrics])
+        .upsert([sleepMetrics], { onConflict: ['user_id', 'start_time'] })
         .select()
         .single();
 
@@ -148,7 +148,7 @@ class SupabaseService {
 
       const { data, error } = await this.supabase
         .from('sleep_metrics')
-        .select('user_id, session_id, sleep_efficiency, created_at')
+        .select('user_id, start_time, sleep_efficiency, created_at')
         .gte(
           'created_at',
           new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
@@ -216,15 +216,25 @@ class SupabaseService {
     try {
       logger.info('Upserting connection record', { userId: userData.user_id });
 
+      // Extract provider from the user data or infer from context
+      const provider = userData.provider || 'TERRA';
+      
+      // Extract reference_id (wallet address) from user data
+      const referenceId = userData.reference_id || userData.wallet_address;
+
+      if (!referenceId) {
+        logger.warn('No reference_id found in user data', { userData });
+      }
+
       const { data, error } = await this.supabase
         .from('connections')
         .upsert(
           [
             {
               id: userData.user_id,
-              provider: userData.provider,
-              reference_id: userData.reference_id,
-              active: userData.active,
+              provider: provider,
+              reference_id: referenceId,
+              active: true,
               last_webhook_update: new Date().toISOString(),
             },
           ],
@@ -240,7 +250,11 @@ class SupabaseService {
         throw new Error(`Failed to upsert connection: ${error.message}`);
       }
 
-      logger.info('Successfully upserted connection', { userId: data.id });
+      logger.info('Successfully upserted connection', { 
+        userId: data.id,
+        provider: data.provider,
+        referenceId: data.reference_id 
+      });
 
       return data;
     } catch (error) {
