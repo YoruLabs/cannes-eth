@@ -2,11 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Trophy, Users, Coins, Calendar, CheckCircle, Warning, Wallet } from "phosphor-react";
-import NavBar from "../../components/layouts/NavBar";
+import { Trophy, Users, Coins, Calendar, CircleNotch } from "phosphor-react";
 import { useMiniKit } from "../../hooks/useMiniKit";
 import { MiniKit } from "@worldcoin/minikit-js";
-import { HEALTH_CHALLENGE_ADDRESS, WLD_TOKEN_ADDRESS } from "@/lib/web3";
+import MobileScreen from "@/components/layouts/MobileScreen";
+import { FlickeringGrid } from "@/components/magicui/flickering-grid";
 
 export default function ChallengesPage() {
   const router = useRouter();
@@ -20,6 +20,10 @@ export default function ChallengesPage() {
   const [challenges, setChallenges] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isCheckingWallet, setIsCheckingWallet] = useState(true);
+  const [windowDimensions, setWindowDimensions] = useState({
+    width: 375,
+    height: 812,
+  });
 
   // Check wallet connection before showing challenges
   useEffect(() => {
@@ -40,11 +44,11 @@ export default function ChallengesPage() {
     if (!isCheckingWallet) {
       const loadChallenges = async () => {
         try {
-          // Load challenge #2 (the one we created with 0.01 WLD)
-          const challenge2 = await getChallengeData(1);
+          // Load challenge #1 (the one we created with 0.01 WLD)
+          const challenge1 = await getChallengeData(1);
           
-          if (challenge2) {
-            setChallenges([challenge2]);
+          if (challenge1) {
+            setChallenges([challenge1]);
           }
         } catch (error) {
           console.error('Failed to load challenges:', error);
@@ -71,174 +75,123 @@ export default function ChallengesPage() {
 
   if (isCheckingWallet || loading) {
     return (
-      <>
-        <div className="min-h-screen bg-gray-50 pb-24">
-          <div className="container mx-auto px-4 py-8">
-            <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-              <p className="text-gray-600 mt-4">
-                {isCheckingWallet ? 'Checking wallet connection...' : 'Loading challenges...'}
-              </p>
-            </div>
-          </div>
+      <MobileScreen className="relative flex flex-col bg-gradient-to-br from-transparent via-slate-50 to-slate-100 overflow-hidden">
+        <FlickeringGrid
+          className="absolute inset-0 z-0"
+          squareSize={5}
+          gridGap={3}
+          color="#000000"
+          maxOpacity={0.03}
+          flickerChance={0.05}
+          height={windowDimensions.height}
+          width={windowDimensions.width}
+        />
+        <div className="relative z-2 flex-1 flex flex-col items-center justify-center">
+          <CircleNotch className="h-8 w-8 animate-spin text-purple-500 mb-4" />
+          <p className="text-gray-600 font-medium">
+            {isCheckingWallet ? 'Checking wallet connection...' : 'Loading challenges...'}
+          </p>
         </div>
-        <NavBar />
-      </>
+      </MobileScreen>
     );
   }
 
   return (
-    <>
-      <div className="min-h-screen bg-gray-50 pb-24">
-        <div className="container mx-auto px-4 py-8">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-8">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Health Challenges</h1>
-              <p className="text-gray-600 mt-2">Stake WLD tokens and prove your commitment to healthy living</p>
-            </div>
-          </div>
+    <MobileScreen className="relative flex flex-col bg-gradient-to-br from-transparent via-slate-50 to-slate-100 overflow-hidden">
+      <FlickeringGrid
+        className="absolute inset-0 z-0"
+        squareSize={5}
+        gridGap={3}
+        color="#000000"
+        maxOpacity={0.03}
+        flickerChance={0.05}
+        height={windowDimensions.height}
+        width={windowDimensions.width}
+      />
 
-          {/* Wallet Status */}
-          <div className="bg-white rounded-xl p-6 shadow-sm mb-8">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              <Wallet className="w-5 h-5 text-purple-500" />
-              World App Wallet
-            </h3>
-            
-            {isConnected ? (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-green-50 rounded-lg p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <CheckCircle className="w-5 h-5 text-green-500" weight="fill" />
-                    <span className="text-green-700 font-medium">Connected</span>
-                  </div>
-                  <div className="text-xs text-green-600 font-mono break-all">
-                    {address}
-                  </div>
-                </div>
-                
-                <div className="bg-blue-50 rounded-lg p-4">
-                  <div className="text-blue-700 text-sm mb-1">WLD Balance</div>
-                  <div className="text-blue-900 font-semibold text-lg">{wldBalance} WLD</div>
-                </div>
-                
-                <div className="bg-purple-50 rounded-lg p-4">
-                  <div className="text-purple-700 text-sm mb-1">Network</div>
-                  <div className="text-purple-900 font-semibold">World Chain Mainnet</div>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 p-4 bg-yellow-50 rounded-lg">
-                <Warning className="w-5 h-5 text-yellow-500" />
-                <span className="text-yellow-700">
-                  Please open this app in the World App to connect your wallet
-                </span>
-              </div>
-            )}
-          </div>
-
-          {/* Challenges Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {challenges.length > 0 ? (
-              challenges.map((challenge) => (
-                <div key={challenge.id} className="bg-white rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <Trophy className="w-6 h-6 text-yellow-500" />
-                      <h3 className="text-lg font-semibold text-gray-900">{challenge.name}</h3>
-                    </div>
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(challenge.isActive, challenge.isCompleted)}`}>
-                      {getStatusText(challenge.isActive, challenge.isCompleted)}
-                    </span>
-                  </div>
-
-                  <p className="text-gray-600 text-sm mb-4">
-                    Walk 10,000 steps every day for 7 days straight. Prove your dedication to healthy living!
-                  </p>
-
-                  <div className="space-y-3 mb-6">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Coins className="w-4 h-4 text-yellow-500" />
-                        <span className="text-gray-600 text-sm">Stake</span>
-                      </div>
-                      <span className="font-semibold text-gray-900">{challenge.entryFee} WLD</span>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Users className="w-4 h-4 text-blue-500" />
-                        <span className="text-gray-600 text-sm">Participants</span>
-                      </div>
-                      <span className="font-semibold text-gray-900">{challenge.participantCount}</span>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Trophy className="w-4 h-4 text-green-500" />
-                        <span className="text-gray-600 text-sm">Prize Pool</span>
-                      </div>
-                      <span className="font-semibold text-green-600">{challenge.totalPool} WLD</span>
-                    </div>
-
-                    <div className="pt-2 border-t border-gray-100">
-                      <div className="flex items-center gap-2">
-                        <Calendar className="w-4 h-4 text-purple-500" />
-                        <span className="text-gray-600 text-sm">
-                          {challenge.isCompleted ? 'Challenge completed' : 
-                           challenge.isActive ? 'Challenge is active' : 'Challenge upcoming'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => router.push(`/challenges/${challenge.id}`)}
-                    className="w-full bg-blue-500 text-white py-3 rounded-lg hover:bg-blue-600 transition-colors font-medium"
-                  >
-                    View Challenge
-                  </button>
-                </div>
-              ))
-            ) : (
-              <div className="col-span-full text-center py-12">
-                <Trophy className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">No Challenges Available</h3>
-                <p className="text-gray-600">Check back later for new health challenges!</p>
-              </div>
-            )}
-          </div>
-
-          {/* Contract Info */}
-          <div className="bg-blue-50 rounded-xl p-6 mt-8">
-            <h3 className="text-lg font-semibold text-blue-900 mb-4">Smart Contract Information</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-              <div>
-                <div className="text-blue-700 mb-1">Health Challenge Contract:</div>
-                <div className="text-blue-900 font-mono text-xs break-all">
-                {HEALTH_CHALLENGE_ADDRESS}
-                </div>
-              </div>
-              <div>
-                <div className="text-blue-700 mb-1">WLD Token Contract:</div>
-                <div className="text-blue-900 font-mono text-xs break-all">
-                {WLD_TOKEN_ADDRESS}
-                </div>
-              </div>
-              <div>
-                <div className="text-blue-700 mb-1">Network:</div>
-                <div className="text-blue-900">World Chain Mainnet (Chain ID: 480)</div>
-              </div>
-              <div>
-                <div className="text-blue-700 mb-1">Explorer:</div>
-                <div className="text-blue-900">worldscan.org</div>
-              </div>
-            </div>
+      <div className="relative z-2 w-full min-h-screen flex flex-col px-6 pt-16 pb-24">
+        {/* Header Section */}
+        <div className="w-full mb-8">
+          <div className="text-start">
+            <p className="text-4xl font-bold text-gray-800 mb-3">Challenges</p>
+            <p className="text-gray-600 mb-6">Stake WLD tokens and prove your commitment to healthy living</p>
           </div>
         </div>
+
+        <div className="flex-1 space-y-6 max-w-md mx-auto w-full">
+          {/* Challenges */}
+          {challenges.length > 0 ? (
+            challenges.map((challenge) => (
+              <div key={challenge.id} className="bg-white/80 backdrop-blur-sm border border-gray-200 shadow-xl rounded-2xl p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-yellow-100 rounded-lg">
+                      <Trophy className="w-5 h-5 text-yellow-600" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-800">{challenge.name}</h3>
+                  </div>
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(challenge.isActive, challenge.isCompleted)}`}>
+                    {getStatusText(challenge.isActive, challenge.isCompleted)}
+                  </span>
+                </div>
+
+                <p className="text-gray-600 text-sm mb-6">
+                  Walk 10,000 steps every day for 7 days straight. Prove your dedication to healthy living!
+                </p>
+
+                <div className="space-y-4 mb-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Coins className="w-4 h-4 text-yellow-500" />
+                      <span className="text-gray-600 text-sm">Stake</span>
+                    </div>
+                    <span className="font-semibold text-gray-800">{challenge.entryFee} WLD</span>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Users className="w-4 h-4 text-blue-500" />
+                      <span className="text-gray-600 text-sm">Participants</span>
+                    </div>
+                    <span className="font-semibold text-gray-800">{challenge.participantCount}</span>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Trophy className="w-4 h-4 text-green-500" />
+                      <span className="text-gray-600 text-sm">Prize Pool</span>
+                    </div>
+                    <span className="font-semibold text-green-600">{challenge.totalPool} WLD</span>
+                  </div>
+
+                  <div className="pt-2 border-t border-gray-200">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-purple-500" />
+                      <span className="text-gray-600 text-sm">
+                        {challenge.isCompleted ? 'Challenge completed' : 
+                         challenge.isActive ? 'Challenge is active' : 'Challenge upcoming'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => router.push(`/challenges/${challenge.id}`)}
+                  className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                >
+                  View Challenge
+                </button>
+              </div>
+            ))
+          ) : (
+            <div className="bg-white/80 backdrop-blur-sm border border-gray-200 shadow-xl rounded-2xl p-8 text-center">
+              <Trophy className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-gray-800 mb-2">No Challenges Available</h3>
+              <p className="text-gray-600 text-sm">Check back later for new health challenges!</p>
+            </div>
+          )}
+        </div>
       </div>
-      <NavBar />
-    </>
+    </MobileScreen>
   );
 } 
