@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 // ---- config ----
-const REDIRECT_URI = "https://world.org/mini-app?app_id=app_58d87e75f86ee1d5774b836e7190153d&path=/whoop"
+const REDIRECT_URI = "https://mantis-famous-personally.ngrok-free.app/whoop"
 
 const SCOPES = [
   "offline",
@@ -82,7 +82,8 @@ export default function WhoopConnect() {
     authURL.searchParams.set("redirect_uri", REDIRECT_URI);
     authURL.searchParams.set("scope", SCOPES);
     authURL.searchParams.set("state", state);
-    window.location.href = authURL.toString();
+    // window.location.href = authURL.toString();
+    window.location.href = "https://api.prod.whoop.com/oauth/oauth2/auth?response_type=code&client_id=186dab5b-12d3-411a-86d7-4f187d0fcff0&redirect_uri=https%3A%2F%2Fworld.org%2Fmini-app%3Fapp_id%3Dapp_58d87e75f86ee1d5774b836e7190153d%26path%3D%2Fwhoop&scope=offline%20read%3Aprofile&state=STATE123"
   };
 
   const fetchAllData = async () => {
