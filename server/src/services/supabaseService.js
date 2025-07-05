@@ -295,6 +295,78 @@ class SupabaseService {
   }
 
   /**
+   * Get connections by wallet address
+   * @param {string} walletAddress - Wallet address (reference_id)
+   * @returns {Array} Connection records
+   */
+  async getConnectionsByWalletAddress(walletAddress) {
+    try {
+      logger.info('Fetching connections by wallet address', { walletAddress });
+
+      const { data, error } = await this.supabase
+        .from('connections')
+        .select('*')
+        .eq('reference_id', walletAddress)
+        .eq('active', true);
+
+      if (error) {
+        logger.error('Error fetching connections by wallet address', { error });
+        throw new Error(`Failed to fetch connections: ${error.message}`);
+      }
+
+      logger.info('Successfully fetched connections by wallet address', {
+        walletAddress,
+        count: data.length,
+      });
+
+      return data;
+    } catch (error) {
+      logger.error('Error in getConnectionsByWalletAddress', {
+        error: error.message,
+        stack: error.stack,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Get sleep metrics by user ID
+   * @param {string} userId - User ID
+   * @param {number} limit - Number of records to return (default: 30)
+   * @returns {Array} Sleep metrics
+   */
+  async getSleepMetricsByUserId(userId, limit = 30) {
+    try {
+      logger.info('Fetching sleep metrics by user ID', { userId, limit });
+
+      const { data, error } = await this.supabase
+        .from('sleep_metrics')
+        .select('*')
+        .eq('user_id', userId)
+        .order('start_time', { ascending: false })
+        .limit(limit);
+
+      if (error) {
+        logger.error('Error fetching sleep metrics by user ID', { error });
+        throw new Error(`Failed to fetch sleep metrics: ${error.message}`);
+      }
+
+      logger.info('Successfully fetched sleep metrics by user ID', {
+        userId,
+        count: data.length,
+      });
+
+      return data;
+    } catch (error) {
+      logger.error('Error in getSleepMetricsByUserId', {
+        error: error.message,
+        stack: error.stack,
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Get all connections for a wallet address (reference_id)
    * @param {string} walletAddress - Wallet address from World miniapp
    * @returns {Array} Connection records

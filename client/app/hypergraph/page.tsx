@@ -74,7 +74,7 @@ function CoreOperations() {
     redirectToConnect({
       storage: localStorage,
       connectUrl: 'https://hypergraph-connect.vercel.app/',
-      successUrl: 'https://world.org/mini-app?app_id=app_58d87e75f86ee1d5774b836e7190153d&path=/hypergraph',
+      successUrl: 'https://996d-83-144-23-156.ngrok-free.app/hypergraph',
       appId: HYPERGRAPH_CONFIG.appId,
       redirectFn: (url: URL) => {
         window.open(url.toString());

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@/providers/user-provider";
-import { useSleepMetrics } from "@/hooks/useSleepMetrics";
+import { useSleepMetrics } from "@/lib/hooks/useSleepMetrics";
 import { CircleNotch, Heart, Moon, Activity, Thermometer, Warning, TrendUp, TrendDown, Minus } from "phosphor-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
 import MobileScreen from "@/components/layouts/MobileScreen";
@@ -25,7 +25,7 @@ export default function StatsPage() {
 
     const redirect = async () => {
       setIsRedirecting(true);
-      
+
       // Small delay to prevent redirect flashing
       await new Promise(resolve => setTimeout(resolve, 100));
 
@@ -102,14 +102,14 @@ export default function StatsPage() {
           height={windowDimensions.height}
           width={windowDimensions.width}
         />
-        
+
         <div className="relative z-2 w-full min-h-screen flex flex-col px-6 pt-16 pb-24">
           {/* Header Section */}
           <div className="w-full mb-8">
             <div className="text-start">
               <p className="text-4xl font-bold text-gray-800 mb-3">Stats</p>
               <p className="text-gray-600 mb-6">Your health metrics</p>
-              
+
               {/* Data Status Indicator */}
               {sleepLoading && (
                 <div className="flex items-center gap-2 text-sm text-gray-500">
@@ -117,14 +117,14 @@ export default function StatsPage() {
                   <span>Loading your data...</span>
                 </div>
               )}
-              
+
               {sleepError && (
                 <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 p-2 rounded-lg">
                   <Warning className="h-4 w-4" />
                   <span>Error loading data: {sleepError}</span>
                 </div>
               )}
-              
+
               {!sleepLoading && !sleepError && !sleepStats.hasData && (
                 <div className="flex items-center gap-2 text-sm text-amber-600 bg-amber-50 p-2 rounded-lg">
                   <Warning className="h-4 w-4" />
@@ -144,7 +144,7 @@ export default function StatsPage() {
                 <h3 className="text-lg font-semibold text-gray-800">Last Night</h3>
                 {sleepStats.hasData && sleepStats.summary?.trends && getTrendIcon(sleepStats.summary.trends.sleepDuration)}
               </div>
-              
+
               <div className="grid grid-cols-3 gap-4 mb-4">
                 <div className="text-center">
                   <p className="text-2xl font-bold text-gray-800">{sleepStats.current.sleep.lastNight.duration}</p>
@@ -159,10 +159,10 @@ export default function StatsPage() {
                   <p className="text-xs text-gray-600">Score</p>
                 </div>
               </div>
-              
+
               {/* Progress bar for sleep score */}
               <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
+                <div
                   className="bg-blue-600 h-2 rounded-full transition-all duration-300"
                   style={{ width: `${sleepStats.current.sleep.lastNight.score}%` }}
                 ></div>
@@ -178,30 +178,30 @@ export default function StatsPage() {
                   </div>
                   <h3 className="text-lg font-semibold text-gray-800">Sleep Duration (7 Days)</h3>
                 </div>
-                
+
                 <div className="h-48">
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={sleepStats.historical.last7Days}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                      <XAxis 
-                        dataKey="date" 
+                      <XAxis
+                        dataKey="date"
                         tickFormatter={formatChartDate}
                         fontSize={12}
                         stroke="#666"
                       />
-                      <YAxis 
+                      <YAxis
                         domain={['dataMin - 0.5', 'dataMax + 0.5']}
                         fontSize={12}
                         stroke="#666"
                       />
-                      <Tooltip 
+                      <Tooltip
                         labelFormatter={(value) => formatChartDate(value)}
                         formatter={(value: number) => [`${value}h`, 'Sleep Duration']}
                       />
-                      <Line 
-                        type="monotone" 
-                        dataKey="sleep_duration" 
-                        stroke="#3B82F6" 
+                      <Line
+                        type="monotone"
+                        dataKey="sleep_duration"
+                        stroke="#3B82F6"
                         strokeWidth={2}
                         dot={{ r: 4 }}
                         activeDot={{ r: 6 }}
@@ -220,7 +220,7 @@ export default function StatsPage() {
                 </div>
                 <h3 className="text-lg font-semibold text-gray-800">Heart Rate</h3>
               </div>
-              
+
               <div className="grid grid-cols-3 gap-4">
                 <div className="text-center">
                   <p className="text-2xl font-bold text-gray-800">{sleepStats.current.sleep.heartRate.resting}</p>
@@ -247,28 +247,28 @@ export default function StatsPage() {
                   <h3 className="text-lg font-semibold text-gray-800">Sleep Efficiency (7 Days)</h3>
                   {sleepStats.summary?.trends && getTrendIcon(sleepStats.summary.trends.efficiency)}
                 </div>
-                
+
                 <div className="h-48">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={sleepStats.historical.last7Days}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                      <XAxis 
-                        dataKey="date" 
+                      <XAxis
+                        dataKey="date"
                         tickFormatter={formatChartDate}
                         fontSize={12}
                         stroke="#666"
                       />
-                      <YAxis 
+                      <YAxis
                         domain={[0, 100]}
                         fontSize={12}
                         stroke="#666"
                       />
-                      <Tooltip 
+                      <Tooltip
                         labelFormatter={(value) => formatChartDate(value)}
                         formatter={(value: number) => [`${value}%`, 'Efficiency']}
                       />
-                      <Bar 
-                        dataKey="sleep_efficiency" 
+                      <Bar
+                        dataKey="sleep_efficiency"
                         fill="#10B981"
                         radius={[4, 4, 0, 0]}
                       />
@@ -287,7 +287,7 @@ export default function StatsPage() {
                   </div>
                   <h3 className="text-lg font-semibold text-gray-800">Sleep Stages (Last Night)</h3>
                 </div>
-                
+
                 <div className="h-48">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
@@ -325,7 +325,7 @@ export default function StatsPage() {
                 <h3 className="text-lg font-semibold text-gray-800">Recovery</h3>
                 {sleepStats.hasData && sleepStats.summary?.trends && getTrendIcon(sleepStats.summary.trends.recovery)}
               </div>
-              
+
               <div className="space-y-3">
                 <div className="flex justify-between items-center">
                   <span className="text-gray-600 text-sm">Recovery Score</span>
@@ -339,10 +339,10 @@ export default function StatsPage() {
                   <span className="text-gray-600 text-sm">HRV</span>
                   <span className="font-semibold text-gray-800">{sleepStats.current.sleep.recovery.hrv}ms</span>
                 </div>
-                
+
                 {/* Progress bar for recovery score */}
                 <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
-                  <div 
+                  <div
                     className="bg-purple-600 h-2 rounded-full transition-all duration-300"
                     style={{ width: `${sleepStats.current.sleep.recovery.score}%` }}
                   ></div>
@@ -370,7 +370,7 @@ export default function StatsPage() {
                     <span className="font-medium">{sleepStats.summary.weeklyAverage.score}/100</span>
                   </div>
                   <p className="text-xs text-gray-600 mt-2">
-                    {sleepStats.summary.weeklyAverage.efficiency > 80 ? 
+                    {sleepStats.summary.weeklyAverage.efficiency > 80 ?
                       "Excellent sleep patterns! Keep up the great work! 🌟" :
                       "Room for improvement. Consider a consistent bedtime routine! 💤"
                     }

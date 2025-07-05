@@ -1,6 +1,7 @@
 require('dotenv').config();
 const fastify = require('fastify');
 const webhookRoutes = require('./routes/webhook');
+const whoopRoutes = require('./routes/whoop');
 const logger = require('./config/logger');
 
 // Create Fastify instance
@@ -29,6 +30,9 @@ server.register(webhookRoutes, { prefix: '/webhook' });
 
 // Register historical data routes
 server.register(require('./routes/historical'), { prefix: '/api' });
+
+// Register Whoop routes
+server.register(whoopRoutes, { prefix: '/api/whoop' });
 
 // Error handler
 server.setErrorHandler(function (error, request, reply) {
@@ -83,6 +87,11 @@ const start = async () => {
     logger.info('Available endpoints:', {
       webhook: 'POST /webhook/terra',
       health: 'GET /webhook/health',
+      whoopAuth: 'POST /api/whoop/auth/token',
+      whoopData: 'POST /api/whoop/authenticate-and-store',
+      whoopProfile: 'POST /api/whoop/profile',
+      whoopSleepData: 'POST /api/whoop/sleep-data',
+      whoopUserData: 'GET /api/whoop/user-data/:walletAddress',
     });
   } catch (err) {
     logger.error('Error starting server', {
