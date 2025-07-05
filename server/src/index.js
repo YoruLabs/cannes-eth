@@ -2,6 +2,7 @@ require('dotenv').config();
 const fastify = require('fastify');
 const webhookRoutes = require('./routes/webhook');
 const whoopRoutes = require('./routes/whoop');
+const challengeRoutes = require('./routes/challenges');
 const logger = require('./config/logger');
 
 // Create Fastify instance
@@ -33,6 +34,9 @@ server.register(require('./routes/historical'), { prefix: '/api' });
 
 // Register Whoop routes
 server.register(whoopRoutes, { prefix: '/api/whoop' });
+
+// Register Challenge routes
+server.register(challengeRoutes, { prefix: '/api/challenges' });
 
 // Error handler
 server.setErrorHandler(function (error, request, reply) {

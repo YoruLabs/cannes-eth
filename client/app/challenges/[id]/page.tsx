@@ -26,7 +26,7 @@ export default function ChallengePage() {
     address, 
     wldBalance, 
     isLoading: web3Loading,
-    getChallengeData,
+    getCombinedChallengeData,
     joinChallenge,
     completeChallenge
   } = useMiniKit();
@@ -45,7 +45,7 @@ export default function ChallengePage() {
   useEffect(() => {
     const loadChallenge = async () => {
       try {
-        const challengeData = await getChallengeData(challengeId);
+        const challengeData = await getCombinedChallengeData(challengeId);
         if (challengeData) {
           setChallenge(challengeData);
         }
@@ -59,7 +59,7 @@ export default function ChallengePage() {
     if (challengeId) {
       loadChallenge();
     }
-  }, [challengeId, getChallengeData]);
+  }, [challengeId, getCombinedChallengeData]);
 
   const handleJoinChallenge = async () => {
     if (!isConnected) {
@@ -74,10 +74,10 @@ export default function ChallengePage() {
       
       if (result.success) {
         setHasJoined(true);
-        alert(`Successfully joined "${challenge.name}"! Transaction: ${result.txId}`);
+        alert(`Successfully joined "${challenge.title}"! Transaction: ${result.txId}`);
         
         // Refresh challenge data
-        const updatedChallenge = await getChallengeData(challengeId);
+        const updatedChallenge = await getCombinedChallengeData(challengeId);
         if (updatedChallenge) {
           setChallenge(updatedChallenge);
         }
@@ -179,7 +179,7 @@ export default function ChallengePage() {
             <ArrowLeft className="w-5 h-5 text-gray-600" />
           </button>
           <div className="flex-1">
-            <h1 className="text-2xl font-bold text-gray-800">{challenge.name}</h1>
+            <h1 className="text-2xl font-bold text-gray-800">{challenge.title}</h1>
             <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(challenge.isActive, challenge.isCompleted)} mt-2`}>
               {getStatusText(challenge.isActive, challenge.isCompleted)}
             </span>

@@ -21,6 +21,12 @@ interface UseMiniKitReturn {
   
   // Contract functions
   getChallengeData: (challengeId: number) => Promise<any>;
+  getChallengeCounter: () => Promise<number>;
+  getChallengeBlockchainData: (challengeId: number) => Promise<any>;
+  getChallengeDatabaseData: (challengeId: number) => Promise<any>;
+  getMultipleChallengeDatabaseData: (challengeIds: number[]) => Promise<any[]>;
+  getCombinedChallengeData: (challengeId: number) => Promise<any>;
+  getMultipleCombinedChallengeData: (challengeIds: number[]) => Promise<any[]>;
   joinChallenge: (challengeId: number, entryFee: string) => Promise<{ success: boolean; txId?: string; error?: string }>;
   completeChallenge: (challengeId: number) => Promise<{ success: boolean; txId?: string; error?: string }>;
 }
@@ -116,6 +122,211 @@ export const useMiniKit = (): UseMiniKitReturn => {
       return null;
     }
   }, []);
+
+  // Get challenge counter from blockchain
+  const getChallengeCounter = useCallback(async () => {
+    console.log('🔍 Getting challenge counter from blockchain');
+    
+    if (isTestEnvironment) {
+      return 3; // Mock counter
+    }
+
+    try {
+      const counter = await publicClient.readContract({
+        address: HEALTH_CHALLENGE_ADDRESS,
+        abi: HEALTH_CHALLENGE_ABI,
+        functionName: 'challengeCounter',
+      });
+      
+      const counterNumber = Number(counter);
+      console.log('✅ Challenge counter:', counterNumber);
+      return counterNumber;
+    } catch (error) {
+      console.error('❌ Failed to get challenge counter:', error);
+      return 0;
+    }
+  }, []);
+
+  // Get blockchain data for a challenge
+  const getChallengeBlockchainData = useCallback(async (challengeId: number) => {
+    console.log('🔍 Getting blockchain data for challenge:', challengeId);
+    
+    if (isTestEnvironment) {
+      return {
+        id: challengeId,
+        entryFee: '0.01',
+        totalPool: challengeId === 1 ? '0.01' : '0',
+        participantCount: challengeId === 1 ? 1 : 0,
+        winnerCount: challengeId === 1 ? 1 : 0,
+        isActive: true,
+        isCompleted: challengeId === 1,
+      };
+    }
+
+    try {
+      const challenge = await publicClient.readContract({
+        address: HEALTH_CHALLENGE_ADDRESS,
+        abi: HEALTH_CHALLENGE_ABI,
+        functionName: 'getChallengeDetails',
+        args: [BigInt(challengeId)],
+      });
+      
+      return {
+        id: Number(challenge[0]),
+        entryFee: formatEther(challenge[1] as bigint),
+        totalPool: formatEther(challenge[2] as bigint),
+        participantCount: Number(challenge[3]),
+        winnerCount: Number(challenge[4]),
+        isActive: challenge[5],
+        isCompleted: challenge[6],
+      };
+    } catch (error) {
+      console.error('❌ Failed to get blockchain data:', error);
+      return null;
+    }
+  }, []);
+
+  // Get database data for a challenge from server
+  const getChallengeDatabaseData = useCallback(async (challengeId: number) => {
+    console.log('🔍 Getting database data for challenge:', challengeId);
+    
+    if (isTestEnvironment) {
+      return {
+        id: challengeId,
+        title: challengeId === 2 ? 'Challenge #2' : 'Sleep Efficiency Master',
+        description: challengeId === 2 ? 'Complete your health goals to win!' : 'Achieve an average sleep efficiency of 85% or higher over 7 days',
+        challengeType: challengeId === 2 ? 'health' : 'sleep_efficiency',
+        status: 'created',
+        canJoinNow: challengeId === 3,
+        metricType: challengeId === 3 ? 'sleep_efficiency' : null,
+        targetValue: challengeId === 3 ? 85 : null,
+        targetUnit: challengeId === 3 ? 'percentage' : null,
+      };
+    }
+
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL}/api/challenges/db-only/${challengeId}`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      return data.success ? data.data : null;
+    } catch (error) {
+      console.error('❌ Failed to get database data:', error);
+      return null;
+    }
+  }, []);
+
+  // Get multiple challenges database data from server
+  const getMultipleChallengeDatabaseData = useCallback(async (challengeIds: number[]) => {
+    console.log('🔍 Getting database data for multiple challenges:', challengeIds);
+    
+    if (isTestEnvironment) {
+      return challengeIds.map(id => ({
+        id,
+        title: id === 2 ? 'Challenge #2' : 'Sleep Efficiency Master',
+        description: id === 2 ? 'Complete your health goals to win!' : 'Achieve an average sleep efficiency of 85% or higher over 7 days',
+        challengeType: id === 2 ? 'health' : 'sleep_efficiency',
+        status: 'created',
+        canJoinNow: id === 3,
+        metricType: id === 3 ? 'sleep_efficiency' : null,
+        targetValue: id === 3 ? 85 : null,
+        targetUnit: id === 3 ? 'percentage' : null,
+      }));
+    }
+
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_SERVER_URL}/api/challenges/db-only/batch/${challengeIds.join(',')}`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      return data.success ? data.data : [];
+    } catch (error) {
+      console.error('❌ Failed to get multiple database data:', error);
+      return [];
+    }
+  }, []);
+
+  // Combine blockchain and database data for a challenge
+  const getCombinedChallengeData = useCallback(async (challengeId: number) => {
+    console.log('🔍 Getting combined challenge data for ID:', challengeId);
+    
+    try {
+      // Fetch both blockchain and database data in parallel
+      const [blockchainData, databaseData] = await Promise.all([
+        getChallengeBlockchainData(challengeId),
+        getChallengeDatabaseData(challengeId),
+      ]);
+
+      if (!blockchainData) {
+        console.error('❌ No blockchain data found for challenge:', challengeId);
+        return null;
+      }
+
+      // Combine the data (database data takes precedence for metadata)
+      const combinedData = {
+        ...blockchainData,
+        ...databaseData,
+        // Ensure blockchain data for these fields
+        entryFee: blockchainData.entryFee,
+        totalPool: blockchainData.totalPool,
+        participantCount: blockchainData.participantCount,
+        winnerCount: blockchainData.winnerCount,
+        isActive: blockchainData.isActive,
+        isCompleted: blockchainData.isCompleted,
+      };
+
+      console.log('✅ Combined challenge data:', combinedData);
+      return combinedData;
+    } catch (error) {
+      console.error('❌ Failed to get combined challenge data:', error);
+      return null;
+    }
+  }, [getChallengeBlockchainData, getChallengeDatabaseData]);
+
+  // Get multiple challenges with combined data
+  const getMultipleCombinedChallengeData = useCallback(async (challengeIds: number[]) => {
+    console.log('🔍 Getting combined data for multiple challenges:', challengeIds);
+    
+    try {
+      // Fetch database data for all challenges
+      const databaseData = await getMultipleChallengeDatabaseData(challengeIds);
+      
+      // Fetch blockchain data for each challenge in parallel
+      const blockchainPromises = challengeIds.map(id => getChallengeBlockchainData(id));
+      const blockchainResults = await Promise.all(blockchainPromises);
+
+      // Combine the data
+      const combinedChallenges = challengeIds.map((challengeId, index) => {
+        const blockchainData = blockchainResults[index];
+        const dbData = databaseData.find((db: any) => db.id === challengeId);
+
+        if (!blockchainData) {
+          console.warn('❌ No blockchain data for challenge:', challengeId);
+          return null;
+        }
+
+        return {
+          ...blockchainData,
+          ...dbData,
+          // Ensure blockchain data for these fields
+          entryFee: blockchainData.entryFee,
+          totalPool: blockchainData.totalPool,
+          participantCount: blockchainData.participantCount,
+          winnerCount: blockchainData.winnerCount,
+          isActive: blockchainData.isActive,
+          isCompleted: blockchainData.isCompleted,
+        };
+      }).filter(Boolean); // Remove null entries
+
+      console.log('✅ Combined multiple challenge data:', combinedChallenges);
+      return combinedChallenges;
+    } catch (error) {
+      console.error('❌ Failed to get multiple combined challenge data:', error);
+      return [];
+    }
+  }, [getChallengeBlockchainData, getMultipleChallengeDatabaseData]);
 
   // Join challenge using MiniKit
   const joinChallenge = useCallback(async (challengeId: number, stakeAmount: string) => {
@@ -286,14 +497,17 @@ export const useMiniKit = (): UseMiniKitReturn => {
   }, [address, getWldBalance]);
 
   return {
-    // Connection state
     isConnected,
     address,
     wldBalance,
     isLoading,
-    
-    // Contract functions
     getChallengeData,
+    getChallengeCounter,
+    getChallengeBlockchainData,
+    getChallengeDatabaseData,
+    getMultipleChallengeDatabaseData,
+    getCombinedChallengeData,
+    getMultipleCombinedChallengeData,
     joinChallenge,
     completeChallenge,
   };
