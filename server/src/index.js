@@ -27,6 +27,9 @@ server.addContentTypeParser(
 // Register webhook routes
 server.register(webhookRoutes, { prefix: '/webhook' });
 
+// Register historical data routes
+server.register(require('./routes/historical'), { prefix: '/api' });
+
 // Error handler
 server.setErrorHandler(function (error, request, reply) {
   logger.error('Unhandled error', {
