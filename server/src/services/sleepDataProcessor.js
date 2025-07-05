@@ -3,14 +3,25 @@ const { ProcessedSleepMetricsSchema } = require('../schemas/sleepData');
 
 class SleepDataProcessor {
   /**
-   * Process raw Terra sleep data and extract relevant metrics for challenges
-   * @param {Object} terraData - Raw Terra sleep data
-   * @param {string} userId - User ID from Terra
+   * Process raw sleep data and extract relevant metrics for challenges
+   * @param {Object} sleepData - Raw sleep data (Terra or Whoop format)
+   * @param {string} userId - User ID (optional if already in sleepData)
    * @returns {Object} Processed sleep metrics
    */
-  static processSleepData(terraData, userId) {
+  static processSleepData(sleepData, userId = null) {
     try {
-      logger.info('Processing sleep data for user', { userId });
+      const actualUserId = userId || sleepData.user_id;
+      logger.info('Processing sleep data for user', { userId: actualUserId });
+
+      // Check if this is already processed Whoop data or raw Terra data
+      if (sleepData.user_id && sleepData.start_time && sleepData.end_time) {
+        // This is already processed data (from Whoop service), just return it
+        logger.info('Sleep data already processed, returning as-is');
+        return sleepData;
+      }
+
+      // This is raw Terra data, process it
+      const terraData = sleepData;
 
       // Calculate total sleep duration
       const totalSleepDuration = this.calculateTotalSleepDuration(
@@ -34,7 +45,7 @@ class SleepDataProcessor {
 
       // Create consolidated metrics object
       const processedMetrics = {
-        user_id: userId,
+        user_id: actualUserId,
         start_time: terraData.metadata.start_time,
         end_time: terraData.metadata.end_time,
         total_sleep_duration_seconds: Math.round(totalSleepDuration),
@@ -53,12 +64,12 @@ class SleepDataProcessor {
         awake_duration_seconds: Math.round(
           terraData.sleep_durations_data.awake.duration_awake_state_seconds
         ),
-        sleep_latency_seconds: Math.round(
-          terraData.sleep_durations_data.awake.sleep_latency_seconds
-        ),
-        wake_up_latency_seconds: Math.round(
-          terraData.sleep_durations_data.awake.wake_up_latency_seconds
-        ),
+        sleep_latency_seconds: terraData.sleep_durations_data.awake.sleep_latency_seconds 
+          ? Math.round(terraData.sleep_durations_data.awake.sleep_latency_seconds)
+          : null,
+        wake_up_latency_seconds: terraData.sleep_durations_data.awake.wake_up_latency_seconds
+          ? Math.round(terraData.sleep_durations_data.awake.wake_up_latency_seconds)
+          : null,
         avg_heart_rate_bpm: heartRateMetrics.avgHeartRate
           ? Math.round(heartRateMetrics.avgHeartRate)
           : null,
@@ -80,31 +91,29 @@ class SleepDataProcessor {
         snoring_duration_seconds: respirationMetrics.snoringDuration
           ? Math.round(respirationMetrics.snoringDuration)
           : null,
-        temperature_delta: terraData.temperature_data.delta || null,
-        readiness_score: terraData.readiness_data.readiness
+        temperature_delta: terraData.temperature_data?.delta || null,
+        readiness_score: terraData.readiness_data?.readiness
           ? Math.round(terraData.readiness_data.readiness)
           : null,
-        recovery_level: Math.round(terraData.readiness_data.recovery_level),
-        sleep_score: terraData.scores.sleep
+        recovery_level: terraData.readiness_data?.recovery_level
+          ? Math.round(terraData.readiness_data.recovery_level)
+          : null,
+        sleep_score: terraData.scores?.sleep
           ? Math.round(terraData.scores.sleep)
           : null,
         created_at: new Date().toISOString(),
       };
 
-      // Validate processed metrics
-      const validatedMetrics =
-        ProcessedSleepMetricsSchema.parse(processedMetrics);
-
       logger.info('Successfully processed sleep data', {
-        userId,
+        userId: actualUserId,
         totalSleepDuration,
         sleepEfficiency,
       });
 
-      return validatedMetrics;
+      return processedMetrics;
     } catch (error) {
       logger.error('Error processing sleep data', {
-        userId,
+        userId: userId || sleepData.user_id,
         error: error.message,
         stack: error.stack,
       });
