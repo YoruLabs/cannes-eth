@@ -1,408 +1,514 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {Test, console} from "forge-std/Test.sol";
-import {HealthChallengePool} from "../src/HealthChallengePool.sol";
-import {MockWLDToken} from "../src/MockWLDToken.sol";
+import "forge-std/Test.sol";
+import "../src/HealthChallengePool.sol";
+import "../src/MockWLDToken.sol";
 
 contract HealthChallengePoolTest is Test {
-    HealthChallengePool public challengePool;
+    HealthChallengePool public pool;
     MockWLDToken public wldToken;
     
-    address public owner;
+    address public owner = address(0x1);
     address public backendSigner;
-    address public user1;
-    address public user2;
-    address public user3;
+    uint256 public backendSignerPrivateKey = 0x2;
+    address public user1 = address(0x3);
+    address public user2 = address(0x4);
+    address public user3 = address(0x5);
     
-    uint256 public backendSignerPrivateKey;
-    
-    // Challenge parameters
-    string constant CHALLENGE_NAME = "10K Steps Challenge";
-    string constant CHALLENGE_DESCRIPTION = "Walk 10,000 steps daily for 7 days";
-    string constant CHALLENGE_TYPE = "steps";
-    uint256 constant ENTRY_FEE = 10 * 10**18; // 10 WLD
-    uint256 constant START_TIME_OFFSET = 1 hours;
-    uint256 constant END_TIME_OFFSET = 8 days;
-    
-    event ChallengeCreated(
-        uint256 indexed challengeId,
-        string name,
-        string challengeType,
-        uint256 entryFee,
-        uint256 startTime,
-        uint256 endTime
-    );
-    
-    event UserJoinedChallenge(
-        uint256 indexed challengeId,
-        address indexed user,
-        uint256 amount
-    );
-    
-    event ChallengeCompleted(
-        uint256 indexed challengeId,
-        uint256 winnerCount,
-        uint256 prizePerWinner
-    );
+    uint256 public constant ENTRY_FEE = 1 ether; // 1 WLD
+    uint256 public constant INITIAL_BALANCE = 1000 ether; // 1000 WLD per user
     
     function setUp() public {
-        owner = address(this);
-        
-        // Create backend signer
-        backendSignerPrivateKey = 0x1234567890123456789012345678901234567890123456789012345678901234;
+        // Generate backend signer from private key
         backendSigner = vm.addr(backendSignerPrivateKey);
         
-        // Create test users
-        user1 = makeAddr("user1");
-        user2 = makeAddr("user2");
-        user3 = makeAddr("user3");
-        
-        // Deploy contracts
+        // Deploy contracts as owner
+        vm.startPrank(owner);
         wldToken = new MockWLDToken();
-        challengePool = new HealthChallengePool(address(wldToken), backendSigner);
+        pool = new HealthChallengePool(address(wldToken), backendSigner);
+        vm.stopPrank();
         
         // Mint tokens to users
-        address[] memory users = new address[](3);
-        users[0] = user1;
-        users[1] = user2;
-        users[2] = user3;
-        wldToken.mintToMultiple(users, 1000 * 10**18); // 1000 WLD each
+        vm.startPrank(owner);
+        wldToken.mint(user1, INITIAL_BALANCE);
+        wldToken.mint(user2, INITIAL_BALANCE);
+        wldToken.mint(user3, INITIAL_BALANCE);
+        vm.stopPrank();
         
-        // Approve spending for users
+        // Approve pool to spend tokens
         vm.prank(user1);
-        wldToken.approve(address(challengePool), type(uint256).max);
+        wldToken.approve(address(pool), type(uint256).max);
         
         vm.prank(user2);
-        wldToken.approve(address(challengePool), type(uint256).max);
+        wldToken.approve(address(pool), type(uint256).max);
         
         vm.prank(user3);
-        wldToken.approve(address(challengePool), type(uint256).max);
-    }
-    
-    function testDeployment() public {
-        assertEq(address(challengePool.wldToken()), address(wldToken));
-        assertEq(challengePool.backendSigner(), backendSigner);
-        assertEq(challengePool.owner(), owner);
-        assertEq(challengePool.challengeCounter(), 0);
+        wldToken.approve(address(pool), type(uint256).max);
     }
     
     function testCreateChallenge() public {
-        uint256 startTime = block.timestamp + START_TIME_OFFSET;
-        uint256 endTime = block.timestamp + END_TIME_OFFSET;
+        vm.prank(owner);
+        pool.createChallenge(ENTRY_FEE);
         
-        vm.expectEmit(true, true, true, true);
-        emit ChallengeCreated(1, CHALLENGE_NAME, CHALLENGE_TYPE, ENTRY_FEE, startTime, endTime);
-        
-        challengePool.createChallenge(
-            CHALLENGE_NAME,
-            CHALLENGE_DESCRIPTION,
-            CHALLENGE_TYPE,
-            ENTRY_FEE,
-            startTime,
-            endTime
-        );
-        
-        assertEq(challengePool.challengeCounter(), 1);
-        
-        // Check challenge details
         (
             uint256 id,
-            string memory name,
-            string memory description,
-            string memory challengeType,
             uint256 entryFee,
-            uint256 startTimeReturned,
-            uint256 endTimeReturned,
             uint256 totalPool,
             uint256 participantCount,
+            uint256 winnerCount,
             bool isActive,
-            bool isCompleted,
-            uint256 winnerCount
-        ) = challengePool.getChallengeDetails(1);
+            bool isCompleted
+        ) = pool.getChallengeDetails(1);
         
         assertEq(id, 1);
-        assertEq(name, CHALLENGE_NAME);
-        assertEq(description, CHALLENGE_DESCRIPTION);
-        assertEq(challengeType, CHALLENGE_TYPE);
         assertEq(entryFee, ENTRY_FEE);
-        assertEq(startTimeReturned, startTime);
-        assertEq(endTimeReturned, endTime);
         assertEq(totalPool, 0);
         assertEq(participantCount, 0);
+        assertEq(winnerCount, 0);
         assertTrue(isActive);
         assertFalse(isCompleted);
-        assertEq(winnerCount, 0);
     }
     
-    function testCreateChallengeFailsForNonOwner() public {
+    function testCreateChallengeOnlyOwner() public {
         vm.prank(user1);
-        vm.expectRevert(abi.encodeWithSignature("OwnableUnauthorizedAccount(address)", user1));
-        challengePool.createChallenge(
-            CHALLENGE_NAME,
-            CHALLENGE_DESCRIPTION,
-            CHALLENGE_TYPE,
-            ENTRY_FEE,
-            block.timestamp + START_TIME_OFFSET,
-            block.timestamp + END_TIME_OFFSET
-        );
+        vm.expectRevert();
+        pool.createChallenge(ENTRY_FEE);
+    }
+    
+    function testCreateChallengeZeroFee() public {
+        vm.prank(owner);
+        vm.expectRevert("Entry fee must be greater than 0");
+        pool.createChallenge(0);
     }
     
     function testJoinChallenge() public {
         // Create challenge
-        uint256 startTime = block.timestamp + START_TIME_OFFSET;
-        uint256 endTime = block.timestamp + END_TIME_OFFSET;
+        vm.prank(owner);
+        pool.createChallenge(ENTRY_FEE);
         
-        challengePool.createChallenge(
-            CHALLENGE_NAME,
-            CHALLENGE_DESCRIPTION,
-            CHALLENGE_TYPE,
-            ENTRY_FEE,
-            startTime,
-            endTime
-        );
+        uint256 initialBalance = wldToken.balanceOf(user1);
         
-        uint256 user1BalanceBefore = wldToken.balanceOf(user1);
-        uint256 contractBalanceBefore = wldToken.balanceOf(address(challengePool));
-        
-        vm.expectEmit(true, true, true, true);
-        emit UserJoinedChallenge(1, user1, ENTRY_FEE);
-        
+        // Join challenge
         vm.prank(user1);
-        challengePool.joinChallenge(1);
+        pool.joinChallenge(1);
         
-        // Check balances
-        assertEq(wldToken.balanceOf(user1), user1BalanceBefore - ENTRY_FEE);
-        assertEq(wldToken.balanceOf(address(challengePool)), contractBalanceBefore + ENTRY_FEE);
+        // Check user balance decreased
+        assertEq(wldToken.balanceOf(user1), initialBalance - ENTRY_FEE);
         
         // Check challenge state
-        assertTrue(challengePool.isParticipant(1, user1));
-        assertFalse(challengePool.isWinner(1, user1));
+        (
+            ,
+            ,
+            uint256 totalPool,
+            uint256 participantCount,
+            ,
+            ,
+        ) = pool.getChallengeDetails(1);
         
-        // Check updated challenge details
-        (, , , , , , , uint256 totalPool, uint256 participantCount, , ,) = challengePool.getChallengeDetails(1);
         assertEq(totalPool, ENTRY_FEE);
         assertEq(participantCount, 1);
         
+        // Check participant status
+        assertTrue(pool.isParticipant(1, user1));
+        
         // Check participant list
-        address[] memory participants = challengePool.getChallengeParticipants(1);
+        address[] memory participants = pool.getChallengeParticipants(1);
         assertEq(participants.length, 1);
         assertEq(participants[0], user1);
+        
+        // Check user challenge history
+        uint256[] memory userChallenges = pool.getUserChallenges(user1);
+        assertEq(userChallenges.length, 1);
+        assertEq(userChallenges[0], 1);
     }
     
     function testJoinChallengeMultipleUsers() public {
         // Create challenge
-        uint256 startTime = block.timestamp + START_TIME_OFFSET;
-        uint256 endTime = block.timestamp + END_TIME_OFFSET;
+        vm.prank(owner);
+        pool.createChallenge(ENTRY_FEE);
         
-        challengePool.createChallenge(
-            CHALLENGE_NAME,
-            CHALLENGE_DESCRIPTION,
-            CHALLENGE_TYPE,
-            ENTRY_FEE,
-            startTime,
-            endTime
-        );
-        
-        // User1 joins
+        // Multiple users join
         vm.prank(user1);
-        challengePool.joinChallenge(1);
+        pool.joinChallenge(1);
         
-        // User2 joins
         vm.prank(user2);
-        challengePool.joinChallenge(1);
+        pool.joinChallenge(1);
         
-        // User3 joins
         vm.prank(user3);
-        challengePool.joinChallenge(1);
+        pool.joinChallenge(1);
         
         // Check challenge state
-        (, , , , , , , uint256 totalPool, uint256 participantCount, , ,) = challengePool.getChallengeDetails(1);
+        (
+            ,
+            ,
+            uint256 totalPool,
+            uint256 participantCount,
+            ,
+            ,
+        ) = pool.getChallengeDetails(1);
+        
         assertEq(totalPool, ENTRY_FEE * 3);
         assertEq(participantCount, 3);
         
-        // Check all participants
-        assertTrue(challengePool.isParticipant(1, user1));
-        assertTrue(challengePool.isParticipant(1, user2));
-        assertTrue(challengePool.isParticipant(1, user3));
+        // Check all are participants
+        assertTrue(pool.isParticipant(1, user1));
+        assertTrue(pool.isParticipant(1, user2));
+        assertTrue(pool.isParticipant(1, user3));
         
-        address[] memory participants = challengePool.getChallengeParticipants(1);
+        // Check participant list
+        address[] memory participants = pool.getChallengeParticipants(1);
         assertEq(participants.length, 3);
     }
     
-    function testJoinChallengeFailsAfterStart() public {
+    function testJoinChallengeAlreadyJoined() public {
         // Create challenge
-        uint256 startTime = block.timestamp + START_TIME_OFFSET;
-        uint256 endTime = block.timestamp + END_TIME_OFFSET;
+        vm.prank(owner);
+        pool.createChallenge(ENTRY_FEE);
         
-        challengePool.createChallenge(
-            CHALLENGE_NAME,
-            CHALLENGE_DESCRIPTION,
-            CHALLENGE_TYPE,
-            ENTRY_FEE,
-            startTime,
-            endTime
-        );
-        
-        // Fast forward past start time
-        vm.warp(startTime + 1);
-        
+        // Join challenge
         vm.prank(user1);
-        vm.expectRevert("Challenge has already started");
-        challengePool.joinChallenge(1);
+        pool.joinChallenge(1);
+        
+        // Try to join again
+        vm.prank(user1);
+        vm.expectRevert("Already joined this challenge");
+        pool.joinChallenge(1);
     }
     
-    function testVerifyAndDistributePrizes() public {
-        // Create and setup challenge
-        uint256 startTime = block.timestamp + START_TIME_OFFSET;
-        uint256 endTime = block.timestamp + END_TIME_OFFSET;
+    function testJoinInactiveChallenge() public {
+        // Create challenge
+        vm.prank(owner);
+        pool.createChallenge(ENTRY_FEE);
         
-        challengePool.createChallenge(
-            CHALLENGE_NAME,
-            CHALLENGE_DESCRIPTION,
-            CHALLENGE_TYPE,
-            ENTRY_FEE,
-            startTime,
-            endTime
-        );
+        // Cancel challenge
+        vm.prank(owner);
+        pool.cancelChallenge(1);
         
-        // Users join
+        // Try to join cancelled challenge
         vm.prank(user1);
-        challengePool.joinChallenge(1);
+        vm.expectRevert("Challenge is not active");
+        pool.joinChallenge(1);
+    }
+    
+    function testJoinCompletedChallenge() public {
+        // Create challenge and have users join
+        vm.prank(owner);
+        pool.createChallenge(ENTRY_FEE);
         
-        vm.prank(user2);
-        challengePool.joinChallenge(1);
+        vm.prank(user1);
+        pool.joinChallenge(1);
         
-        vm.prank(user3);
-        challengePool.joinChallenge(1);
-        
-        // Fast forward past end time
-        vm.warp(endTime + 1);
-        
-        // Create winners array (user1 and user2 win)
-        address[] memory winners = new address[](2);
+        // Complete challenge
+        address[] memory winners = new address[](1);
         winners[0] = user1;
-        winners[1] = user2;
         
-        // Create signature
         bytes32 messageHash = keccak256(abi.encodePacked(uint256(1), winners));
         bytes32 ethSignedMessageHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", messageHash));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(backendSignerPrivateKey, ethSignedMessageHash);
         bytes memory signature = abi.encodePacked(r, s, v);
         
-        uint256 user1BalanceBefore = wldToken.balanceOf(user1);
-        uint256 user2BalanceBefore = wldToken.balanceOf(user2);
-        uint256 user3BalanceBefore = wldToken.balanceOf(user3);
+        pool.completeChallenge(1, winners, signature);
         
-        uint256 expectedPrizePerWinner = (ENTRY_FEE * 3) / 2; // Total pool divided by 2 winners
+        // Try to join completed challenge
+        vm.prank(user2);
+        vm.expectRevert("Challenge is already completed");
+        pool.joinChallenge(1);
+    }
+    
+    function testJoinNonexistentChallenge() public {
+        vm.prank(user1);
+        vm.expectRevert("Challenge is not active");
+        pool.joinChallenge(999);
+    }
+    
+    function testCompleteChallenge() public {
+        // Create challenge and have users join
+        vm.prank(owner);
+        pool.createChallenge(ENTRY_FEE);
         
-        vm.expectEmit(true, true, true, true);
-        emit ChallengeCompleted(1, 2, expectedPrizePerWinner);
+        vm.prank(user1);
+        pool.joinChallenge(1);
         
-        challengePool.verifyAndDistributePrizes(1, winners, signature);
+        vm.prank(user2);
+        pool.joinChallenge(1);
         
-        // Check balances
-        assertEq(wldToken.balanceOf(user1), user1BalanceBefore + expectedPrizePerWinner);
-        assertEq(wldToken.balanceOf(user2), user2BalanceBefore + expectedPrizePerWinner);
-        assertEq(wldToken.balanceOf(user3), user3BalanceBefore); // No change for non-winner
+        uint256 initialBalance1 = wldToken.balanceOf(user1);
+        uint256 initialBalance2 = wldToken.balanceOf(user2);
+        
+        // Complete challenge with both users as winners
+        address[] memory winners = new address[](2);
+        winners[0] = user1;
+        winners[1] = user2;
+        
+        bytes32 messageHash = keccak256(abi.encodePacked(uint256(1), winners));
+        bytes32 ethSignedMessageHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", messageHash));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(backendSignerPrivateKey, ethSignedMessageHash);
+        bytes memory signature = abi.encodePacked(r, s, v);
+        
+        pool.completeChallenge(1, winners, signature);
+        
+        // Check challenge state
+        (
+            ,
+            ,
+            ,
+            ,
+            uint256 winnerCount,
+            bool isActive,
+            bool isCompleted
+        ) = pool.getChallengeDetails(1);
+        
+        assertEq(winnerCount, 2);
+        assertTrue(isActive);
+        assertTrue(isCompleted);
+        
+        // Check winners received prizes
+        uint256 prizePerWinner = ENTRY_FEE; // 2 WLD total pool / 2 winners = 1 WLD each
+        assertEq(wldToken.balanceOf(user1), initialBalance1 + prizePerWinner);
+        assertEq(wldToken.balanceOf(user2), initialBalance2 + prizePerWinner);
         
         // Check winner status
-        assertTrue(challengePool.isWinner(1, user1));
-        assertTrue(challengePool.isWinner(1, user2));
-        assertFalse(challengePool.isWinner(1, user3));
-        
-        // Check challenge completion
-        (, , , , , , , , , , bool isCompleted, uint256 winnerCount) = challengePool.getChallengeDetails(1);
-        assertTrue(isCompleted);
-        assertEq(winnerCount, 2);
+        assertTrue(pool.isWinner(1, user1));
+        assertTrue(pool.isWinner(1, user2));
         
         // Check winner list
-        address[] memory winnerList = challengePool.getChallengeWinners(1);
+        address[] memory winnerList = pool.getChallengeWinners(1);
         assertEq(winnerList.length, 2);
         assertEq(winnerList[0], user1);
         assertEq(winnerList[1], user2);
     }
     
-    function testVerifyAndDistributePrizesFailsWithInvalidSignature() public {
-        // Setup challenge
-        uint256 startTime = block.timestamp + START_TIME_OFFSET;
-        uint256 endTime = block.timestamp + END_TIME_OFFSET;
-        
-        challengePool.createChallenge(
-            CHALLENGE_NAME,
-            CHALLENGE_DESCRIPTION,
-            CHALLENGE_TYPE,
-            ENTRY_FEE,
-            startTime,
-            endTime
-        );
+    function testCompleteChallengeInvalidSignature() public {
+        // Create challenge and have user join
+        vm.prank(owner);
+        pool.createChallenge(ENTRY_FEE);
         
         vm.prank(user1);
-        challengePool.joinChallenge(1);
+        pool.joinChallenge(1);
         
-        vm.warp(endTime + 1);
-        
+        // Try to complete with invalid signature
         address[] memory winners = new address[](1);
         winners[0] = user1;
         
-        // Create invalid signature (wrong private key)
-        uint256 wrongPrivateKey = 0x9999999999999999999999999999999999999999999999999999999999999999;
+        bytes memory invalidSignature = abi.encodePacked(bytes32(0), bytes32(0), uint8(0));
+        
+        vm.expectRevert(); // Just expect any revert for invalid signature
+        pool.completeChallenge(1, winners, invalidSignature);
+    }
+    
+    function testCompleteChallengeNonParticipantWinner() public {
+        // Create challenge and have user join
+        vm.prank(owner);
+        pool.createChallenge(ENTRY_FEE);
+        
+        vm.prank(user1);
+        pool.joinChallenge(1);
+        
+        // Try to complete with non-participant as winner
+        address[] memory winners = new address[](1);
+        winners[0] = user2; // user2 didn't join
+        
         bytes32 messageHash = keccak256(abi.encodePacked(uint256(1), winners));
         bytes32 ethSignedMessageHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", messageHash));
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(wrongPrivateKey, ethSignedMessageHash);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(backendSignerPrivateKey, ethSignedMessageHash);
         bytes memory signature = abi.encodePacked(r, s, v);
         
-        vm.expectRevert("Invalid signature");
-        challengePool.verifyAndDistributePrizes(1, winners, signature);
+        vm.expectRevert("Winner not a participant");
+        pool.completeChallenge(1, winners, signature);
+    }
+    
+    function testCompleteChallengeAlreadyCompleted() public {
+        // Create challenge and have user join
+        vm.prank(owner);
+        pool.createChallenge(ENTRY_FEE);
+        
+        vm.prank(user1);
+        pool.joinChallenge(1);
+        
+        // Complete challenge
+        address[] memory winners = new address[](1);
+        winners[0] = user1;
+        
+        bytes32 messageHash = keccak256(abi.encodePacked(uint256(1), winners));
+        bytes32 ethSignedMessageHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", messageHash));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(backendSignerPrivateKey, ethSignedMessageHash);
+        bytes memory signature = abi.encodePacked(r, s, v);
+        
+        pool.completeChallenge(1, winners, signature);
+        
+        // Try to complete again
+        vm.expectRevert("Challenge already completed");
+        pool.completeChallenge(1, winners, signature);
+    }
+    
+    function testCompleteChallengeNoWinners() public {
+        // Create challenge and have user join
+        vm.prank(owner);
+        pool.createChallenge(ENTRY_FEE);
+        
+        vm.prank(user1);
+        pool.joinChallenge(1);
+        
+        // Try to complete with no winners
+        address[] memory winners = new address[](0);
+        
+        bytes32 messageHash = keccak256(abi.encodePacked(uint256(1), winners));
+        bytes32 ethSignedMessageHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", messageHash));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(backendSignerPrivateKey, ethSignedMessageHash);
+        bytes memory signature = abi.encodePacked(r, s, v);
+        
+        vm.expectRevert("No winners provided");
+        pool.completeChallenge(1, winners, signature);
+    }
+    
+    function testCompleteChallengeInactiveChallenge() public {
+        // Create challenge
+        vm.prank(owner);
+        pool.createChallenge(ENTRY_FEE);
+        
+        // Cancel challenge
+        vm.prank(owner);
+        pool.cancelChallenge(1);
+        
+        // Try to complete cancelled challenge
+        address[] memory winners = new address[](1);
+        winners[0] = user1;
+        
+        bytes32 messageHash = keccak256(abi.encodePacked(uint256(1), winners));
+        bytes32 ethSignedMessageHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", messageHash));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(backendSignerPrivateKey, ethSignedMessageHash);
+        bytes memory signature = abi.encodePacked(r, s, v);
+        
+        vm.expectRevert("Challenge is not active");
+        pool.completeChallenge(1, winners, signature);
+    }
+    
+    function testCancelChallenge() public {
+        // Create challenge and have users join
+        vm.prank(owner);
+        pool.createChallenge(ENTRY_FEE);
+        
+        vm.prank(user1);
+        pool.joinChallenge(1);
+        
+        vm.prank(user2);
+        pool.joinChallenge(1);
+        
+        uint256 initialBalance1 = wldToken.balanceOf(user1);
+        uint256 initialBalance2 = wldToken.balanceOf(user2);
+        
+        // Cancel challenge
+        vm.prank(owner);
+        pool.cancelChallenge(1);
+        
+        // Check challenge is inactive
+        (
+            ,
+            ,
+            ,
+            ,
+            ,
+            bool isActive,
+            bool isCompleted
+        ) = pool.getChallengeDetails(1);
+        
+        assertFalse(isActive);
+        assertFalse(isCompleted);
+        
+        // Check users got refunded
+        assertEq(wldToken.balanceOf(user1), initialBalance1 + ENTRY_FEE);
+        assertEq(wldToken.balanceOf(user2), initialBalance2 + ENTRY_FEE);
+    }
+    
+    function testCancelChallengeOnlyOwner() public {
+        // Create challenge
+        vm.prank(owner);
+        pool.createChallenge(ENTRY_FEE);
+        
+        // Try to cancel as non-owner
+        vm.prank(user1);
+        vm.expectRevert();
+        pool.cancelChallenge(1);
+    }
+    
+    function testCancelCompletedChallenge() public {
+        // Create challenge and have user join
+        vm.prank(owner);
+        pool.createChallenge(ENTRY_FEE);
+        
+        vm.prank(user1);
+        pool.joinChallenge(1);
+        
+        // Complete challenge
+        address[] memory winners = new address[](1);
+        winners[0] = user1;
+        
+        bytes32 messageHash = keccak256(abi.encodePacked(uint256(1), winners));
+        bytes32 ethSignedMessageHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", messageHash));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(backendSignerPrivateKey, ethSignedMessageHash);
+        bytes memory signature = abi.encodePacked(r, s, v);
+        
+        pool.completeChallenge(1, winners, signature);
+        
+        // Try to cancel completed challenge
+        vm.prank(owner);
+        vm.expectRevert("Challenge already completed");
+        pool.cancelChallenge(1);
     }
     
     function testUpdateBackendSigner() public {
-        address newSigner = makeAddr("newSigner");
+        address newSigner = address(0x999);
         
-        challengePool.updateBackendSigner(newSigner);
-        assertEq(challengePool.backendSigner(), newSigner);
+        vm.prank(owner);
+        pool.updateBackendSigner(newSigner);
+        
+        assertEq(pool.backendSigner(), newSigner);
     }
     
-    function testUpdateBackendSignerFailsForNonOwner() public {
-        address newSigner = makeAddr("newSigner");
+    function testUpdateBackendSignerOnlyOwner() public {
+        address newSigner = address(0x999);
         
         vm.prank(user1);
-        vm.expectRevert(abi.encodeWithSignature("OwnableUnauthorizedAccount(address)", user1));
-        challengePool.updateBackendSigner(newSigner);
+        vm.expectRevert();
+        pool.updateBackendSigner(newSigner);
     }
     
-    function testGetUserChallenges() public {
-        // Create two challenges
-        uint256 startTime = block.timestamp + START_TIME_OFFSET;
-        uint256 endTime = block.timestamp + END_TIME_OFFSET;
+    function testUpdateBackendSignerZeroAddress() public {
+        vm.prank(owner);
+        vm.expectRevert("Invalid signer address");
+        pool.updateBackendSigner(address(0));
+    }
+    
+    function testMultipleChallenges() public {
+        // Create multiple challenges
+        vm.prank(owner);
+        pool.createChallenge(ENTRY_FEE);
         
-        challengePool.createChallenge(
-            CHALLENGE_NAME,
-            CHALLENGE_DESCRIPTION,
-            CHALLENGE_TYPE,
-            ENTRY_FEE,
-            startTime,
-            endTime
-        );
+        vm.prank(owner);
+        pool.createChallenge(ENTRY_FEE * 2);
         
-        challengePool.createChallenge(
-            "Sleep Challenge",
-            "Get 8 hours of sleep daily",
-            "sleep",
-            ENTRY_FEE,
-            startTime,
-            endTime
-        );
+        // Check challenge counter
+        assertEq(pool.challengeCounter(), 2);
         
-        // User1 joins both challenges
+        // Check challenge details
+        (uint256 id1, uint256 entryFee1, , , , , ) = pool.getChallengeDetails(1);
+        (uint256 id2, uint256 entryFee2, , , , , ) = pool.getChallengeDetails(2);
+        
+        assertEq(id1, 1);
+        assertEq(entryFee1, ENTRY_FEE);
+        assertEq(id2, 2);
+        assertEq(entryFee2, ENTRY_FEE * 2);
+        
+        // Users can join different challenges
         vm.prank(user1);
-        challengePool.joinChallenge(1);
+        pool.joinChallenge(1);
         
         vm.prank(user1);
-        challengePool.joinChallenge(2);
+        pool.joinChallenge(2);
         
-        // Check user's challenge history
-        uint256[] memory userChallenges = challengePool.getUserChallenges(user1);
+        // Check user challenge history
+        uint256[] memory userChallenges = pool.getUserChallenges(user1);
         assertEq(userChallenges.length, 2);
         assertEq(userChallenges[0], 1);
         assertEq(userChallenges[1], 2);

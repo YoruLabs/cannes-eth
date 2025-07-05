@@ -10,7 +10,7 @@ import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 
 /**
  * @title HealthChallengePool
- * @dev A contract for health challenges where users stake WLD tokens and winners share the prize pool
+ * @dev Simplified contract for health challenges - metadata handled by backend
  */
 contract HealthChallengePool is ReentrancyGuard, Ownable {
     using SafeERC20 for IERC20;
@@ -25,20 +25,15 @@ contract HealthChallengePool is ReentrancyGuard, Ownable {
     // Challenge counter
     uint256 public challengeCounter;
     
-    // Challenge struct
+    // Challenge struct - simplified
     struct Challenge {
         uint256 id;
-        string name;
-        string description;
-        string challengeType; // "steps", "sleep", "heart_rate", etc.
-        uint256 entryFee; // WLD tokens required to enter
-        uint256 startTime;
-        uint256 endTime;
-        uint256 totalPool; // Total WLD staked
+        uint256 entryFee;
+        uint256 totalPool;
         uint256 participantCount;
+        uint256 winnerCount;
         bool isActive;
         bool isCompleted;
-        uint256 winnerCount;
         mapping(address => bool) participants;
         mapping(address => bool) winners;
         address[] participantList;
@@ -52,32 +47,13 @@ contract HealthChallengePool is ReentrancyGuard, Ownable {
     mapping(address => uint256[]) public userChallenges;
     
     // Events
-    event ChallengeCreated(
-        uint256 indexed challengeId,
-        string name,
-        string challengeType,
-        uint256 entryFee,
-        uint256 startTime,
-        uint256 endTime
-    );
+    event ChallengeCreated(uint256 indexed challengeId, uint256 entryFee);
     
-    event UserJoinedChallenge(
-        uint256 indexed challengeId,
-        address indexed user,
-        uint256 amount
-    );
+    event UserJoinedChallenge(uint256 indexed challengeId, address indexed user, uint256 amount);
     
-    event ChallengeCompleted(
-        uint256 indexed challengeId,
-        uint256 winnerCount,
-        uint256 prizePerWinner
-    );
+    event ChallengeCompleted(uint256 indexed challengeId, uint256 winnerCount, uint256 prizePerWinner);
     
-    event WinnerVerified(
-        uint256 indexed challengeId,
-        address indexed winner,
-        uint256 prize
-    );
+    event WinnerVerified(uint256 indexed challengeId, address indexed winner, uint256 prize);
     
     event BackendSignerUpdated(address indexed oldSigner, address indexed newSigner);
     
@@ -90,41 +66,20 @@ contract HealthChallengePool is ReentrancyGuard, Ownable {
     }
     
     /**
-     * @dev Create a new health challenge
+     * @dev Create a new challenge
      */
-    function createChallenge(
-        string memory _name,
-        string memory _description,
-        string memory _challengeType,
-        uint256 _entryFee,
-        uint256 _startTime,
-        uint256 _endTime
-    ) external onlyOwner {
-        require(_startTime > block.timestamp, "Start time must be in the future");
-        require(_endTime > _startTime, "End time must be after start time");
+    function createChallenge(uint256 _entryFee) external onlyOwner {
         require(_entryFee > 0, "Entry fee must be greater than 0");
         
         challengeCounter++;
         
         Challenge storage newChallenge = challenges[challengeCounter];
         newChallenge.id = challengeCounter;
-        newChallenge.name = _name;
-        newChallenge.description = _description;
-        newChallenge.challengeType = _challengeType;
         newChallenge.entryFee = _entryFee;
-        newChallenge.startTime = _startTime;
-        newChallenge.endTime = _endTime;
         newChallenge.isActive = true;
         newChallenge.isCompleted = false;
         
-        emit ChallengeCreated(
-            challengeCounter,
-            _name,
-            _challengeType,
-            _entryFee,
-            _startTime,
-            _endTime
-        );
+        emit ChallengeCreated(challengeCounter, _entryFee);
     }
     
     /**
@@ -135,7 +90,6 @@ contract HealthChallengePool is ReentrancyGuard, Ownable {
         
         require(challenge.isActive, "Challenge is not active");
         require(!challenge.isCompleted, "Challenge is already completed");
-        require(block.timestamp < challenge.startTime, "Challenge has already started");
         require(!challenge.participants[msg.sender], "Already joined this challenge");
         
         // Transfer WLD tokens from user to contract
@@ -154,12 +108,12 @@ contract HealthChallengePool is ReentrancyGuard, Ownable {
     }
     
     /**
-     * @dev Verify challenge completion and distribute prizes
+     * @dev Complete challenge and distribute prizes
      * @param _challengeId The challenge ID
      * @param _winners Array of winner addresses
      * @param _signature Backend signature verifying the winners
      */
-    function verifyAndDistributePrizes(
+    function completeChallenge(
         uint256 _challengeId,
         address[] calldata _winners,
         bytes calldata _signature
@@ -168,8 +122,8 @@ contract HealthChallengePool is ReentrancyGuard, Ownable {
         
         require(challenge.isActive, "Challenge is not active");
         require(!challenge.isCompleted, "Challenge already completed");
-        require(block.timestamp > challenge.endTime, "Challenge not yet ended");
         require(_winners.length > 0, "No winners provided");
+        require(_winners.length <= challenge.participantCount, "Too many winners");
         
         // Verify signature
         bytes32 messageHash = keccak256(abi.encodePacked(_challengeId, _winners));
@@ -207,14 +161,13 @@ contract HealthChallengePool is ReentrancyGuard, Ownable {
     }
     
     /**
-     * @dev Cancel a challenge (only before it starts)
+     * @dev Cancel a challenge and refund participants
      */
     function cancelChallenge(uint256 _challengeId) external onlyOwner {
         Challenge storage challenge = challenges[_challengeId];
         
         require(challenge.isActive, "Challenge is not active");
         require(!challenge.isCompleted, "Challenge already completed");
-        require(block.timestamp < challenge.startTime, "Challenge has already started");
         
         challenge.isActive = false;
         
@@ -242,33 +195,23 @@ contract HealthChallengePool is ReentrancyGuard, Ownable {
      */
     function getChallengeDetails(uint256 _challengeId) external view returns (
         uint256 id,
-        string memory name,
-        string memory description,
-        string memory challengeType,
         uint256 entryFee,
-        uint256 startTime,
-        uint256 endTime,
         uint256 totalPool,
         uint256 participantCount,
+        uint256 winnerCount,
         bool isActive,
-        bool isCompleted,
-        uint256 winnerCount
+        bool isCompleted
     ) {
         Challenge storage challenge = challenges[_challengeId];
         
         return (
             challenge.id,
-            challenge.name,
-            challenge.description,
-            challenge.challengeType,
             challenge.entryFee,
-            challenge.startTime,
-            challenge.endTime,
             challenge.totalPool,
             challenge.participantCount,
+            challenge.winnerCount,
             challenge.isActive,
-            challenge.isCompleted,
-            challenge.winnerCount
+            challenge.isCompleted
         );
     }
     

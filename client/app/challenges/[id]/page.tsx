@@ -224,7 +224,7 @@ export default function ChallengePage() {
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-blue-700">Contract:</span>
-                    <span className="text-blue-900 font-mono text-xs">0x73c455192547Feb273C000d8B9ee475bA7EabE49</span>
+                    <span className="text-blue-900 font-mono text-xs">0x79399A62F79484171c9a324833F01Bf62a4E1f98</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-blue-700">Network:</span>

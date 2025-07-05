@@ -52,11 +52,11 @@ export const createWalletClientFromWindow = () => {
   return null;
 };
 
-// Contract addresses
-export const HEALTH_CHALLENGE_ADDRESS = '0x73c455192547Feb273C000d8B9ee475bA7EabE49' as const;
-export const WLD_TOKEN_ADDRESS = '0xb37C19bD9bB9569B09f4e91C5C9E4413141b5ED4' as const;
+// Contract addresses - Updated with new deployment
+export const HEALTH_CHALLENGE_ADDRESS = '0x79399A62F79484171c9a324833F01Bf62a4E1f98' as const;
+export const WLD_TOKEN_ADDRESS = '0xAb9f2cdB64F838557050c397f5fBE42A145C6C61' as const;
 
-// Contract ABIs (simplified for the functions we need)
+// Contract ABIs - Updated for simplified contract
 export const HEALTH_CHALLENGE_ABI = [
   {
     type: 'function',
@@ -67,21 +67,16 @@ export const HEALTH_CHALLENGE_ABI = [
   },
   {
     type: 'function',
-    name: 'challenges',
-    inputs: [{ name: '', type: 'uint256' }],
+    name: 'getChallengeDetails',
+    inputs: [{ name: '_challengeId', type: 'uint256' }],
     outputs: [
       { name: 'id', type: 'uint256' },
-      { name: 'name', type: 'string' },
-      { name: 'description', type: 'string' },
-      { name: 'challengeType', type: 'string' },
       { name: 'entryFee', type: 'uint256' },
-      { name: 'startTime', type: 'uint256' },
-      { name: 'endTime', type: 'uint256' },
       { name: 'totalPool', type: 'uint256' },
       { name: 'participantCount', type: 'uint256' },
+      { name: 'winnerCount', type: 'uint256' },
       { name: 'isActive', type: 'bool' },
       { name: 'isCompleted', type: 'bool' },
-      { name: 'winnerCount', type: 'uint256' },
     ],
     stateMutability: 'view',
   },
@@ -95,14 +90,7 @@ export const HEALTH_CHALLENGE_ABI = [
   {
     type: 'function',
     name: 'createChallenge',
-    inputs: [
-      { name: '_name', type: 'string' },
-      { name: '_description', type: 'string' },
-      { name: '_challengeType', type: 'string' },
-      { name: '_entryFee', type: 'uint256' },
-      { name: '_startTime', type: 'uint256' },
-      { name: '_endTime', type: 'uint256' },
-    ],
+    inputs: [{ name: '_entryFee', type: 'uint256' }],
     outputs: [],
     stateMutability: 'nonpayable',
   },
@@ -111,6 +99,7 @@ export const HEALTH_CHALLENGE_ABI = [
     name: 'completeChallenge',
     inputs: [
       { name: '_challengeId', type: 'uint256' },
+      { name: '_winners', type: 'address[]' },
       { name: '_signature', type: 'bytes' },
     ],
     outputs: [],
@@ -118,19 +107,108 @@ export const HEALTH_CHALLENGE_ABI = [
   },
   {
     type: 'function',
-    name: 'participants',
-    inputs: [
-      { name: '', type: 'uint256' },
-      { name: '', type: 'address' },
-    ],
-    outputs: [
-      { name: 'user', type: 'address' },
-      { name: 'stakeAmount', type: 'uint256' },
-      { name: 'hasCompleted', type: 'bool' },
-      { name: 'hasWithdrawn', type: 'bool' },
-      { name: 'joinedAt', type: 'uint256' },
-    ],
+    name: 'cancelChallenge',
+    inputs: [{ name: '_challengeId', type: 'uint256' }],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'getChallengeParticipants',
+    inputs: [{ name: '_challengeId', type: 'uint256' }],
+    outputs: [{ name: '', type: 'address[]' }],
     stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'getChallengeWinners',
+    inputs: [{ name: '_challengeId', type: 'uint256' }],
+    outputs: [{ name: '', type: 'address[]' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'isParticipant',
+    inputs: [
+      { name: '_challengeId', type: 'uint256' },
+      { name: '_user', type: 'address' },
+    ],
+    outputs: [{ name: '', type: 'bool' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'isWinner',
+    inputs: [
+      { name: '_challengeId', type: 'uint256' },
+      { name: '_user', type: 'address' },
+    ],
+    outputs: [{ name: '', type: 'bool' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'getUserChallenges',
+    inputs: [{ name: '_user', type: 'address' }],
+    outputs: [{ name: '', type: 'uint256[]' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'updateBackendSigner',
+    inputs: [{ name: '_newSigner', type: 'address' }],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'backendSigner',
+    inputs: [],
+    outputs: [{ name: '', type: 'address' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'owner',
+    inputs: [],
+    outputs: [{ name: '', type: 'address' }],
+    stateMutability: 'view',
+  },
+  // Events
+  {
+    type: 'event',
+    name: 'ChallengeCreated',
+    inputs: [
+      { name: 'challengeId', type: 'uint256', indexed: true },
+      { name: 'entryFee', type: 'uint256', indexed: false },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'UserJoinedChallenge',
+    inputs: [
+      { name: 'challengeId', type: 'uint256', indexed: true },
+      { name: 'user', type: 'address', indexed: true },
+      { name: 'amount', type: 'uint256', indexed: false },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'ChallengeCompleted',
+    inputs: [
+      { name: 'challengeId', type: 'uint256', indexed: true },
+      { name: 'winnerCount', type: 'uint256', indexed: false },
+      { name: 'prizePerWinner', type: 'uint256', indexed: false },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'WinnerVerified',
+    inputs: [
+      { name: 'challengeId', type: 'uint256', indexed: true },
+      { name: 'winner', type: 'address', indexed: true },
+      { name: 'prize', type: 'uint256', indexed: false },
+    ],
   },
 ] as const;
 
@@ -161,5 +239,25 @@ export const WLD_TOKEN_ABI = [
     ],
     outputs: [{ name: '', type: 'uint256' }],
     stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'transfer',
+    inputs: [
+      { name: 'to', type: 'address' },
+      { name: 'amount', type: 'uint256' },
+    ],
+    outputs: [{ name: '', type: 'bool' }],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'mint',
+    inputs: [
+      { name: 'to', type: 'address' },
+      { name: 'amount', type: 'uint256' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
   },
 ] as const; 

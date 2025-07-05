@@ -111,23 +111,22 @@ export const useWeb3 = () => {
       const challenge = await publicClient.readContract({
         address: HEALTH_CHALLENGE_ADDRESS,
         abi: HEALTH_CHALLENGE_ABI,
-        functionName: 'challenges',
+        functionName: 'getChallengeDetails',
         args: [BigInt(challengeId)],
       });
       
       return {
         id: Number(challenge[0]),
-        name: challenge[1],
-        description: challenge[2],
-        challengeType: challenge[3],
-        entryFee: formatEther(challenge[4] as bigint),
-        startTime: Number(challenge[5]),
-        endTime: Number(challenge[6]),
-        totalPool: formatEther(challenge[7] as bigint),
-        participantCount: Number(challenge[8]),
-        isActive: challenge[9],
-        isCompleted: challenge[10],
-        winnerCount: Number(challenge[11]),
+        entryFee: formatEther(challenge[1] as bigint),
+        totalPool: formatEther(challenge[2] as bigint),
+        participantCount: Number(challenge[3]),
+        winnerCount: Number(challenge[4]),
+        isActive: challenge[5],
+        isCompleted: challenge[6],
+        // Add default metadata since it's not in the contract anymore
+        name: `Challenge #${challengeId}`,
+        description: 'Complete your health goals to win!',
+        challengeType: 'health',
       };
     } catch (error) {
       console.error('Failed to get challenge data:', error);
@@ -216,14 +215,15 @@ export const useWeb3 = () => {
         throw new Error('Wallet not connected');
       }
 
-      // Mock signature - in real app, this would come from backend
+      // Mock signature and winners for testing
+      const mockWinners = [address as `0x${string}`]; // Current user as winner
       const mockSignature = '0x0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000';
 
       const completeTx = await walletClient.writeContract({
         address: HEALTH_CHALLENGE_ADDRESS,
         abi: HEALTH_CHALLENGE_ABI,
         functionName: 'completeChallenge',
-        args: [BigInt(challengeId), mockSignature as `0x${string}`],
+        args: [BigInt(challengeId), mockWinners, mockSignature as `0x${string}`],
         account: address as `0x${string}`,
       });
 
@@ -240,14 +240,7 @@ export const useWeb3 = () => {
   }, [address, isManualConnection]);
 
   // Create challenge (admin function)
-  const createChallenge = useCallback(async (
-    name: string,
-    description: string,
-    challengeType: string,
-    entryFee: string,
-    startTime: number,
-    endTime: number
-  ) => {
+  const createChallenge = useCallback(async (entryFee: string) => {
     if (isManualConnection) {
       // For manual connections, simulate success but warn user
       alert('Manual connection detected. In a real app, you would need to use your actual wallet to sign transactions.');
@@ -268,7 +261,7 @@ export const useWeb3 = () => {
         address: HEALTH_CHALLENGE_ADDRESS,
         abi: HEALTH_CHALLENGE_ABI,
         functionName: 'createChallenge',
-        args: [name, description, challengeType, entryFeeWei, BigInt(startTime), BigInt(endTime)],
+        args: [entryFeeWei],
         account: address as `0x${string}`,
       });
 
