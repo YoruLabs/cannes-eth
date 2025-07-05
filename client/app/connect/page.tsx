@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
@@ -35,6 +35,10 @@ export default function ConnectPage() {
     height: 812,
   });
 
+  // Add ref to prevent duplicate callback processing
+  const callbackProcessingRef = useRef(false);
+  const processedCodesRef = useRef(new Set<string>());
+
   const searchParams = useSearchParams();
   const { user } = useUser();
 
@@ -51,6 +55,12 @@ export default function ConnectPage() {
 
   // Handle OAuth callback parameters (Terra for Oura, Whoop backend for Whoop)
   const handleOAuthCallback = useCallback(async () => {
+    // Prevent duplicate processing
+    if (callbackProcessingRef.current) {
+      console.log("OAuth callback already being processed, skipping...");
+      return;
+    }
+
     const urlParams = new URLSearchParams(window.location.search);
 
     // Check for Whoop OAuth callback parameters
@@ -58,6 +68,25 @@ export default function ConnectPage() {
     const whoopState = urlParams.get("state");
 
     if (whoopCode && whoopState && user?.wallet_address) {
+      // Check if user already has a Whoop connection
+      if (hasWhoopConnection) {
+        console.log("User already has Whoop connection, skipping OAuth callback");
+        // Clean up URL parameters
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, '', newUrl);
+        return;
+      }
+
+      // Check if we've already processed this code
+      if (processedCodesRef.current.has(whoopCode)) {
+        console.log("OAuth code already processed, skipping...");
+        return;
+      }
+
+      // Mark as processing and add code to processed set
+      callbackProcessingRef.current = true;
+      processedCodesRef.current.add(whoopCode);
+
       console.log("Whoop OAuth callback: Processing Whoop authentication");
 
       try {
@@ -75,6 +104,18 @@ export default function ConnectPage() {
 
         if (!response.ok) {
           const errorData = await response.json();
+
+          // Handle 409 Conflict (duplicate processing) gracefully
+          if (response.status === 409) {
+            console.log("OAuth code already processed, cleaning up URL and refreshing connections");
+            // Clean up URL parameters
+            const newUrl = window.location.pathname;
+            window.history.replaceState({}, '', newUrl);
+            // Refresh connections to get latest state
+            setTimeout(refetchConnections, 1000);
+            return;
+          }
+
           throw new Error(errorData.details || `HTTP error! status: ${response.status}`);
         }
 
@@ -99,6 +140,9 @@ export default function ConnectPage() {
       } catch (error) {
         console.error("Error handling Whoop callback:", error);
         toast.error("Failed to complete Whoop connection. Please try again.");
+      } finally {
+        // Reset processing flag
+        callbackProcessingRef.current = false;
       }
       return;
     }
@@ -110,6 +154,14 @@ export default function ConnectPage() {
         urlParams.has("resource") &&
         urlParams.has("reference_id"))
     ) {
+      // Prevent duplicate processing for Terra as well
+      if (callbackProcessingRef.current) {
+        console.log("Terra callback already being processed, skipping...");
+        return;
+      }
+
+      callbackProcessingRef.current = true;
+
       console.log("Terra callback: Processing Terra success callback");
 
       // Terra sends:
@@ -129,6 +181,17 @@ export default function ConnectPage() {
       });
 
       if (terraUserId && terraResource && referenceId && user?.wallet_address) {
+        // Check if user already has an Oura connection
+        if (hasOuraConnection) {
+          console.log("User already has Oura connection, skipping Terra callback");
+          // Clean up URL parameters
+          const newUrl = window.location.pathname;
+          window.history.replaceState({}, '', newUrl);
+          // Reset processing flag
+          callbackProcessingRef.current = false;
+          return;
+        }
+
         // Verify that the reference_id matches our user's wallet address
         if (referenceId === user.wallet_address) {
           try {
@@ -163,11 +226,19 @@ export default function ConnectPage() {
         console.error("Missing required Terra callback parameters");
         toast.error("Connection failed: Missing required parameters");
       }
+
+      // Reset processing flag
+      callbackProcessingRef.current = false;
     }
-  }, [user, refetchConnections, setWaitingForWebhook]);
+  }, [user, hasWhoopConnection, hasOuraConnection, refetchConnections, setWaitingForWebhook]);
 
   // Handle OAuth redirect results and callbacks
   useEffect(() => {
+    // Only process if user is loaded, connections are loaded, and we haven't started processing
+    if (!user?.wallet_address || connectionsLoading || callbackProcessingRef.current) {
+      return;
+    }
+
     // Check for OAuth callback parameters (Whoop or Terra)
     const urlParams = new URLSearchParams(window.location.search);
 
@@ -191,7 +262,7 @@ export default function ConnectPage() {
         toast.error("Failed to connect device. Please try again.");
       }
     }
-  }, [searchParams, user?.wallet_address, refetchConnections, handleOAuthCallback]);
+  }, [searchParams, user?.wallet_address, connectionsLoading, hasWhoopConnection, hasOuraConnection, refetchConnections, handleOAuthCallback]);
 
   // Show error toast if there's a connection error
   useEffect(() => {
