@@ -3,8 +3,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
   useCreateEntity, 
-  preparePublish, 
-  publishOps, 
   useHypergraphApp,
   useQuery,
   useSpaces,
@@ -12,65 +10,20 @@ import {
   useHypergraphAuth,
   useSpace
 } from '@graphprotocol/hypergraph-react';
-import { Connect } from '@graphprotocol/hypergraph';
-import { Patient, HealthProvider } from '@/lib/hypergraph-schema';
+import { User_Oura_Data } from '@/lib/hypergraph-schema';
 import { HYPERGRAPH_CONFIG } from '@/lib/hypergraph-config';
+import { useUser } from '@/providers/user-provider';
+import NavBar from '@/components/layouts/NavBar';
 
-function CoreOperations() {
-  const [results, setResults] = useState<string[]>([]);
+// Navbar Component
+function Navbar() {
   const { authenticated } = useHypergraphAuth();
-  const { redirectToConnect, processConnectAuthSuccess, getSmartSessionClient } = useHypergraphApp();
-  
-  // Check space status
-  const { ready: spaceReady, name: spaceName, id: spaceId } = useSpace({ mode: 'private' });
-  
-  // Hooks for data access
-  const { data: privatePatients } = useQuery(Patient, { mode: 'private' });
-  const { data: privateProviders } = useQuery(HealthProvider, { mode: 'private' });
-  const { data: publicSpaces } = useSpaces({ mode: 'public' });
-  const { data: privateSpaces } = useSpaces({ mode: 'private' });
-  const createPatient = useCreateEntity(Patient);
-  
-  // Alternative creation hook (no space specified)
-  const createPatientAlt = useCreateEntity(Patient, { space: undefined });
+  const { redirectToConnect } = useHypergraphApp();
+  const { user } = useUser();
+  const { ready: spaceReady, name: spaceName } = useSpace({ mode: 'private' });
+  const { data: privateOuraData } = useQuery(User_Oura_Data, { mode: 'private' });
 
-  const addResult = (message: string) => {
-    setResults(prev => [`${new Date().toLocaleTimeString()}: ${message}`, ...prev.slice(0, 9)]);
-  };
-
-  // Debug space status
-  useEffect(() => {
-    console.log("Space Debug Info:", {
-      spaceReady,
-      spaceName,
-      spaceId,
-      configSpaceId: HYPERGRAPH_CONFIG.privateSpaceId,
-      authenticated,
-      privateSpacesCount: privateSpaces?.length || 0,
-      availablePrivateSpaces: privateSpaces?.map(s => ({ id: s.id, name: s.name }))
-    });
-  }, [spaceReady, spaceName, spaceId, authenticated, privateSpaces]);
-
-  // Handle auth success
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const ciphertext = urlParams.get('ciphertext');
-    const nonce = urlParams.get('nonce');
-    
-    if (ciphertext && nonce) {
-      processConnectAuthSuccess({ storage: localStorage, ciphertext, nonce });
-      window.history.replaceState({}, document.title, window.location.pathname);
-      addResult("✅ Authentication successful!");
-    }
-  }, [processConnectAuthSuccess]);
-
-  // 1. Authentication
-  const handleAuthenticate = () => {
-    if (authenticated) {
-      addResult("Already authenticated!");
-      return;
-    }
-    
+  const handleConnect = () => {
     redirectToConnect({
       storage: localStorage,
       connectUrl: 'https://hypergraph-connect.vercel.app/',
@@ -82,287 +35,466 @@ function CoreOperations() {
     });
   };
 
-  // 2. Read from Private Space
-  const handleReadPrivate = () => {
-    addResult(`📖 Private Data - Patients: ${privatePatients?.length || 0}, Providers: ${privateProviders?.length || 0}, Spaces: ${privateSpaces?.length || 0}`);
-    console.log("Private Patients:", privatePatients);
-    console.log("Private Providers:", privateProviders);
-    console.log("Private Spaces:", privateSpaces);
+  return (
+    <nav className="bg-white border-b border-gray-200">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex justify-between items-center h-16">
+          {/* Logo/Brand */}
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <div className="flex items-center">
+                <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center mr-3">
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                  </svg>
+                </div>
+                <span className="text-xl font-bold text-gray-900">Health Wallet</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Right side */}
+          <div className="flex items-center space-x-4">
+            {authenticated ? (
+              <>
+                {/* Space Status */}
+                <div className="hidden sm:flex items-center text-sm text-gray-600">
+                  <div className={`w-2 h-2 rounded-full mr-2 ${spaceReady ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                  <span>{spaceName || 'Unknown'}</span>
+                </div>
+
+                {/* Records Count */}
+                <div className="hidden md:flex items-center text-sm text-gray-600">
+                  <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                  <span>{privateOuraData?.length || 0} records</span>
+                </div>
+
+                {/* User Info */}
+                <div className="flex items-center">
+                  <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
+                    <span className="text-white text-sm font-medium">
+                      {user?.wallet_address?.slice(2, 4).toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="ml-3 hidden sm:block">
+                    <div className="text-sm font-medium text-gray-900">
+                      {user?.wallet_address?.slice(0, 6)}...{user?.wallet_address?.slice(-4)}
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              /* Connect Button when not authenticated */
+              <button
+                onClick={handleConnect}
+                className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 py-2 rounded-lg font-medium hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 flex items-center space-x-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                <span>Connect Data Wallet</span>
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </nav>
+  );
+}
+
+// Main Dashboard Component
+function Dashboard() {
+  const [uploadingOura, setUploadingOura] = useState(false);
+  const [uploadingWhoop, setUploadingWhoop] = useState(false);
+  const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'info', message: string } | null>(null);
+
+  const { user } = useUser();
+  const { ready: spaceReady, name: spaceName, id: spaceId } = useSpace({ mode: 'private' });
+  const { data: privateOuraData } = useQuery(User_Oura_Data, { mode: 'private' });
+  const createOuraData = useCreateEntity(User_Oura_Data);
+
+  const showNotification = (type: 'success' | 'error' | 'info', message: string) => {
+    setNotification({ type, message });
+    setTimeout(() => setNotification(null), 5000);
   };
 
-  // 3. Publish to Private Space (Create only)
-  const handlePublishToPrivate = async () => {
-    if (!authenticated) {
-      addResult("❌ Must authenticate first!");
-      return;
+  // Fetch user data from Supabase (used internally before uploads)
+  const fetchUserHealthData = async (): Promise<any> => {
+    if (!user?.wallet_address) {
+      throw new Error('User wallet address not found');
     }
 
-    if (!spaceReady) {
-      addResult("❌ Private space not ready! Check console for debug info.");
-      console.log("Space not ready - Debug info:", {
-        spaceReady,
-        spaceName,
-        spaceId,
-        privateSpacesAvailable: privateSpaces?.length || 0
-      });
-      return;
-    }
-
-    try {
-      addResult(`🔄 Creating patient in space: ${spaceName || spaceId}`);
-      
-      // Create a sample patient in private space
-      const patient = createPatient({
-        name: "John Doe",
-        age: 30,
-        email: "john@example.com"
-      });
-      
-      addResult("✅ Created and published patient to private space");
-      console.log("Patient created in private space:", patient);
-      
-    } catch (error) {
-      addResult(`❌ Publish to private failed: ${error}`);
-      console.error("Private publish error:", error);
-      console.log("Error context:", {
-        spaceReady,
-        spaceName,
-        spaceId,
-        authenticated,
-        privateSpacesCount: privateSpaces?.length || 0
-      });
-    }
-  };
-
-  // Alternative: Try to create without explicit space (let the system handle it)
-  const handleTryAlternativeCreate = async () => {
-    if (!authenticated) {
-      addResult("❌ Must authenticate first!");
-      return;
-    }
-
-    try {
-      addResult("🧪 Trying alternative approach (no explicit space)...");
-      
-      // Try creating with a different useCreateEntity approach
-      const patient = createPatientAlt({
-        name: "Jane Doe (Alt)",
-        age: 25,
-        email: "jane@example.com"
-      });
-      
-      addResult("✅ Alternative creation successful!");
-      console.log("Patient created with alternative approach:", patient);
-      
-    } catch (error) {
-      addResult(`❌ Alternative approach failed: ${error}`);
-      console.error("Alternative creation error:", error);
-    }
-  };
-
-  // 4. Read from Public Space
-  const handleReadPublic = () => {
-    const publicSpaceCount = publicSpaces?.length || 0;
-    addResult(`🌍 Public Spaces Available: ${publicSpaceCount}`);
-    if (publicSpaces) {
-      publicSpaces.forEach(space => {
-        addResult(`  • ${space.name} (${space.id})`);
-      });
-    }
-    console.log("Public Spaces:", publicSpaces);
-  };
-
-  // 5. Read Patients Data specifically
-  const handleReadPatientsData = () => {
-    const patientCount = privatePatients?.length || 0;
-    addResult(`👥 Found ${patientCount} patient(s) in private space`);
-    
-    if (privatePatients && privatePatients.length > 0) {
-      privatePatients.forEach((patient, index) => {
-        addResult(`  ${index + 1}. ${patient.name} (Age: ${patient.age}, Email: ${patient.email})`);
-      });
-      addResult("📊 Full patient data logged to console");
-      console.log("Detailed Patients Data:", privatePatients);
-    } else {
-      addResult("📭 No patients found in private space");
-    }
-
-    // Also log space and query context
-    console.log("Patients Query Context:", {
-      spaceReady,
-      spaceName,
-      spaceId,
-      patientCount,
-      patients: privatePatients
+    const response = await fetch('/api/user/data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ walletAddress: user.wallet_address }),
     });
+
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.error);
+    }
+
+    return data.data;
+  };
+
+  // Upload Oura data to Hypergraph (now includes automatic Supabase fetch)
+  const handleUploadOuraData = async () => {
+    if (!spaceReady) {
+      showNotification('error', 'Private space not ready');
+      return;
+    }
+
+    setUploadingOura(true);
+    try {
+      // Step 1: Fetch latest data from Supabase
+      showNotification('info', 'Fetching latest data from Supabase...');
+      const userHealthData = await fetchUserHealthData();
+      
+      if (!userHealthData?.sleepMetrics?.length) {
+        showNotification('error', 'No sleep data found in Supabase');
+        return;
+      }
+
+      // Step 2: Upload to Hypergraph
+      showNotification('info', `Uploading ${userHealthData.sleepMetrics.length} sleep records to Hypergraph...`);
+      let uploadedCount = 0;
+      const sleepMetrics = userHealthData.sleepMetrics;
+
+      for (const sleepRecord of sleepMetrics) {
+        const ouraDataEntity = {
+          user_wallet_address: user?.wallet_address || 'unknown',
+          user_id: sleepRecord.user_id || 'unknown',
+          start_time: sleepRecord.start_time || '',
+          end_time: sleepRecord.end_time || '',
+          total_sleep_duration_seconds: sleepRecord.total_sleep_duration_seconds || 0,
+          deep_sleep_duration_seconds: sleepRecord.deep_sleep_duration_seconds || 0,
+          light_sleep_duration_seconds: sleepRecord.light_sleep_duration_seconds || 0,
+          rem_sleep_duration_seconds: sleepRecord.rem_sleep_duration_seconds || 0,
+          awake_duration_seconds: sleepRecord.awake_duration_seconds || 0,
+          sleep_efficiency: sleepRecord.sleep_efficiency || 0,
+          sleep_score: sleepRecord.sleep_score || 0,
+          sleep_quality_score: sleepRecord.sleep_quality_score || 0,
+          sleep_latency_seconds: sleepRecord.sleep_latency_seconds || 0,
+          wake_up_latency_seconds: sleepRecord.wake_up_latency_seconds || 0,
+          avg_heart_rate_bpm: sleepRecord.avg_heart_rate_bpm || 0,
+          resting_heart_rate_bpm: sleepRecord.resting_heart_rate_bpm || 0,
+          avg_hrv_rmssd: sleepRecord.avg_hrv_rmssd || 0,
+          avg_hrv_sdnn: sleepRecord.avg_hrv_sdnn || 0,
+          avg_oxygen_saturation: sleepRecord.avg_oxygen_saturation || 0,
+          avg_breathing_rate: sleepRecord.avg_breathing_rate || 0,
+          snoring_duration_seconds: sleepRecord.snoring_duration_seconds || 0,
+          temperature_delta: sleepRecord.temperature_delta || 0,
+          readiness_score: sleepRecord.readiness_score || 0,
+          recovery_score: sleepRecord.recovery_score || 0,
+          efficiency_score: sleepRecord.efficiency_score || 0,
+          health_score: sleepRecord.health_score || 0,
+          recovery_level: sleepRecord.recovery_level || 0,
+          created_at: sleepRecord.created_at || new Date().toISOString(),
+          data_source: 'oura'
+        };
+
+        createOuraData(ouraDataEntity);
+        uploadedCount++;
+      }
+
+      showNotification('success', `Successfully uploaded ${uploadedCount} Oura sleep records to Hypergraph`);
+    } catch (error) {
+      showNotification('error', `Upload failed: ${error}`);
+    } finally {
+      setUploadingOura(false);
+    }
+  };
+
+  // Upload Whoop data (placeholder - similar to Oura)
+  const handleUploadWhoopData = async () => {
+    if (!spaceReady) {
+      showNotification('error', 'Private space not ready');
+      return;
+    }
+
+    setUploadingWhoop(true);
+    try {
+      // Step 1: Fetch latest data from Supabase
+      showNotification('info', 'Fetching latest Whoop data from Supabase...');
+      const userHealthData = await fetchUserHealthData();
+      
+      if (!userHealthData?.sleepMetrics?.length) {
+        showNotification('error', 'No sleep data found in Supabase');
+        return;
+      }
+
+      // Step 2: Similar implementation to Oura but with data_source: 'whoop'
+      showNotification('info', 'Whoop upload functionality coming soon');
+    } catch (error) {
+      showNotification('error', `Upload failed: ${error}`);
+    } finally {
+      setUploadingWhoop(false);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 py-8">
-      <div className="max-w-2xl mx-auto px-4">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">🏥 Health Wallet</h1>
-          <p className="text-gray-600">Hypergraph Integration (5 Core Functions)</p>
+    <div className="min-h-screen bg-gray-50">
+      <Navbar />
+
+      {/* Notification */}
+      {notification && (
+        <div className={`max-w-6xl mx-auto px-4 py-2`}>
+          <div className={`p-4 rounded-lg ${
+            notification.type === 'success' ? 'bg-green-50 text-green-800 border border-green-200' :
+            notification.type === 'error' ? 'bg-red-50 text-red-800 border border-red-200' :
+            'bg-blue-50 text-blue-800 border border-blue-200'
+          }`}>
+            {notification.message}
+          </div>
+        </div>
+      )}
+
+      <div className="max-w-6xl mx-auto px-4 py-8">
+        {/* Action Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          {/* Upload Oura Card */}
+          <div className="bg-white rounded-xl shadow-sm border p-6">
+            <div className="flex items-center mb-4">
+              <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center mr-3">
+                <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900">Sync Oura Data</h3>
+                <p className="text-sm text-gray-600">Fetch from Supabase & upload to Hypergraph</p>
+              </div>
+            </div>
+            <button
+              onClick={handleUploadOuraData}
+              disabled={uploadingOura || !spaceReady}
+              className="w-full bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {uploadingOura ? 'Syncing...' : 'Sync Oura Data'}
+            </button>
+            <p className="text-xs text-gray-500 mt-2">
+              Automatically fetches latest data from Supabase and stores in Hypergraph
+            </p>
+          </div>
+
+          {/* Upload Whoop Card */}
+          <div className="bg-white rounded-xl shadow-sm border p-6">
+            <div className="flex items-center mb-4">
+              <div className="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center mr-3">
+                <svg className="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900">Sync Whoop Data</h3>
+                <p className="text-sm text-gray-600">Fetch from Supabase & upload to Hypergraph</p>
+              </div>
+            </div>
+            <button
+              onClick={handleUploadWhoopData}
+              disabled={uploadingWhoop || !spaceReady}
+              className="w-full bg-yellow-600 text-white py-2 px-4 rounded-lg hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {uploadingWhoop ? 'Syncing...' : 'Sync Whoop Data'}
+            </button>
+            <p className="text-xs text-gray-500 mt-2">
+              Automatically fetches latest data from Supabase and stores in Hypergraph
+            </p>
+          </div>
         </div>
 
-        {/* Main Card */}
-        <div className="bg-white rounded-lg shadow-lg p-6">
-          {/* Status */}
-          <div className="bg-blue-50 p-4 rounded border mb-6">
-            <p className="text-sm text-gray-700">
-              Auth: {authenticated ? '✅ Authenticated' : '❌ Not Authenticated'} | 
-              Private Spaces: {privateSpaces?.length || 0} | 
-              Public Spaces: {publicSpaces?.length || 0}
-            </p>
-            <p className="text-xs text-gray-600 mt-1">
-              Current Space: {spaceReady ? '✅ Ready' : '❌ Not Ready'} | 
-              Name: {spaceName || 'Unknown'} | 
-              ID: {spaceId?.slice(0, 8)}...
-            </p>
-            {!spaceReady && (
-              <div className="mt-2 p-2 bg-yellow-100 border border-yellow-300 rounded text-xs">
-                <p className="text-yellow-800">⚠️ Space not ready - check console for debug info</p>
-                <p className="text-yellow-700">Available spaces: {privateSpaces?.length || 0}</p>
+        {/* Data Display */}
+        <div className="bg-white rounded-xl shadow-sm border">
+          <div className="p-6 border-b">
+            <h2 className="text-xl font-semibold text-gray-900">Your Sleep Data</h2>
+            <p className="text-sm text-gray-600">Data stored in your private Hypergraph space</p>
+          </div>
+
+          <div className="p-6">
+            {privateOuraData && privateOuraData.length > 0 ? (
+              <div className="space-y-4">
+                {/* Summary Stats */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <p className="text-sm text-gray-600">Total Records</p>
+                    <p className="text-2xl font-bold text-gray-900">{privateOuraData.length}</p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <p className="text-sm text-gray-600">Total Sleep</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {Math.round(privateOuraData.reduce((total: number, record: any) => total + (record.total_sleep_duration_seconds || 0), 0) / 3600)}h
+                    </p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <p className="text-sm text-gray-600">Avg Efficiency</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {Math.round(privateOuraData.reduce((total: number, record: any) => total + (record.sleep_efficiency || 0), 0) / privateOuraData.length)}%
+                    </p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <p className="text-sm text-gray-600">Avg Score</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {Math.round(privateOuraData.reduce((total: number, record: any) => total + (record.sleep_score || 0), 0) / privateOuraData.length)}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Sleep Records List */}
+                <div className="space-y-3">
+                  <h3 className="text-lg font-medium text-gray-900">Recent Sleep Sessions</h3>
+                  {privateOuraData.slice(0, 10).map((record, index) => (
+                    <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                      <div className="flex items-center space-x-4">
+                        <div className="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center">
+                          <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                          </svg>
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900">
+                            {new Date(record.start_time).toLocaleDateString()}
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            {Math.round(record.total_sleep_duration_seconds / 3600 * 10) / 10}h sleep
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-medium text-gray-900">{record.sleep_efficiency}% efficiency</p>
+                        <p className="text-sm text-gray-600">Score: {record.sleep_score || 'N/A'}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                </svg>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No Data Found</h3>
+                <p className="text-gray-600 mb-4">Start by syncing your health data from Supabase to Hypergraph</p>
+                <button
+                  onClick={handleUploadOuraData}
+                  className="bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Sync Your Data
+                </button>
               </div>
             )}
           </div>
-
-          {/* 5 Core Buttons */}
-          <div className="grid grid-cols-2 gap-4 mb-6">
-            <button 
-              onClick={handleAuthenticate}
-              className="bg-blue-500 text-white px-6 py-4 rounded-lg hover:bg-blue-600 font-semibold text-lg transition-colors"
-            >
-              🔑 1. Authenticate
-            </button>
-            
-            <button 
-              onClick={handleReadPrivate}
-              className="bg-green-500 text-white px-6 py-4 rounded-lg hover:bg-green-600 font-semibold text-lg transition-colors"
-            >
-              📖 2. Read Private
-            </button>
-            
-            <button 
-              onClick={handlePublishToPrivate}
-              className="bg-purple-500 text-white px-6 py-4 rounded-lg hover:bg-purple-600 font-semibold text-lg transition-colors disabled:opacity-50"
-              disabled={!authenticated}
-            >
-              🚀 3. Publish to Private
-            </button>
-            
-            <button 
-              onClick={handleReadPublic}
-              className="bg-orange-500 text-white px-6 py-4 rounded-lg hover:bg-orange-600 font-semibold text-lg transition-colors"
-            >
-              🌍 4. Read Public
-            </button>
-
-            <button 
-              onClick={handleReadPatientsData}
-              className="bg-teal-500 text-white px-6 py-4 rounded-lg hover:bg-teal-600 font-semibold text-lg transition-colors col-span-2"
-            >
-              👥 5. Read Patients Data
-            </button>
-          </div>
-
-          {/* Alternative/Debug Button */}
-          {!spaceReady && authenticated && (
-            <div className="mb-6">
-              <button 
-                onClick={handleTryAlternativeCreate}
-                className="w-full bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600 font-semibold transition-colors"
-              >
-                🧪 Try Alternative Create (Debug)
-              </button>
-              <p className="text-xs text-gray-500 mt-1 text-center">
-                Attempts to create data without explicit space assignment
-              </p>
-            </div>
-          )}
-
-          {/* Results Log */}
-          <div className="bg-gray-50 p-4 rounded border">
-            <h3 className="font-semibold mb-3 text-gray-900">📋 Operation Log:</h3>
-            <div className="text-sm space-y-1 max-h-64 overflow-y-auto">
-              {results.length === 0 ? (
-                <p className="text-gray-500 italic">No operations yet... Click a button above!</p>
-              ) : (
-                results.map((result, index) => (
-                  <p key={index} className="text-gray-800 font-mono text-xs bg-white p-2 rounded">{result}</p>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="text-center mt-8 text-sm text-gray-500">
-          <p>Hypergraph Integration for Cannes ETH</p>
-          <p>Private Space: <code className="bg-gray-200 px-1 rounded">{HYPERGRAPH_CONFIG.privateSpaceId}</code></p>
         </div>
       </div>
+      <NavBar />
     </div>
   );
 }
 
-// Main App Component with Space Provider
+// Main Component with Space Provider
+function CoreOperations() {
+  const { authenticated } = useHypergraphAuth();
+  const { processConnectAuthSuccess } = useHypergraphApp();
+
+  // Handle auth success
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const ciphertext = urlParams.get('ciphertext');
+    const nonce = urlParams.get('nonce');
+    
+    if (ciphertext && nonce) {
+      processConnectAuthSuccess({ storage: localStorage, ciphertext, nonce });
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, [processConnectAuthSuccess]);
+
+  if (!authenticated) {
+    return <ConnectDataWallet />;
+  }
+
+  return <Dashboard />;
+}
+
+// Connect Data Wallet Component
+function ConnectDataWallet() {
+  const { redirectToConnect } = useHypergraphApp();
+  
+  const handleConnect = () => {
+    redirectToConnect({
+      storage: localStorage,
+      connectUrl: 'https://hypergraph-connect.vercel.app/',
+      successUrl: 'https://996d-83-144-23-156.ngrok-free.app/hypergraph',
+      appId: HYPERGRAPH_CONFIG.appId,
+      redirectFn: (url: URL) => {
+        window.open(url.toString());
+      },
+    });
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+      <Navbar />
+      <div className="flex items-center justify-center px-4" style={{ minHeight: 'calc(100vh - 64px)' }}>
+        <div className="max-w-md w-full">
+          <div className="bg-white rounded-2xl shadow-xl p-8 text-center">
+            <div className="mb-6">
+              <div className="w-20 h-20 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+              </div>
+              <h1 className="text-2xl font-bold text-gray-900 mb-2">Connect Data Wallet</h1>
+              <p className="text-gray-600">Securely connect your wallet to access your health data on the Hypergraph</p>
+            </div>
+
+            <div className="space-y-4 mb-6">
+              <div className="flex items-center text-sm text-gray-700">
+                <svg className="w-5 h-5 text-green-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+                Store your Oura & Whoop data privately
+              </div>
+              <div className="flex items-center text-sm text-gray-700">
+                <svg className="w-5 h-5 text-green-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+                Access your data from anywhere
+              </div>
+              <div className="flex items-center text-sm text-gray-700">
+                <svg className="w-5 h-5 text-green-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+                Decentralized & secure storage
+              </div>
+            </div>
+
+            <button
+              onClick={handleConnect}
+              className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white py-3 px-6 rounded-lg font-semibold hover:from-blue-600 hover:to-indigo-700 transition-all duration-300 transform hover:scale-105"
+            >
+              Connect Wallet
+            </button>
+
+            <p className="text-xs text-gray-500 mt-4">
+              Your data is encrypted and stored in your private space
+            </p>
+          </div>
+        </div>
+      </div>
+      <NavBar />
+    </div>
+  );
+}
+
 export default function HypergraphPage() {
   const { data: privateSpaces } = useSpaces({ mode: 'private' });
   const { authenticated } = useHypergraphAuth();
   
-  // Debug what spaces we have
-  console.log("App Debug - Available spaces:", {
-    authenticated,
-    privateSpacesCount: privateSpaces?.length || 0,
-    privateSpaces: privateSpaces?.map(s => ({ id: s.id, name: s.name }))
-  });
-  
-  // If no private spaces are available, show a different interface
-  if (authenticated && privateSpaces && privateSpaces.length === 0) {
-    return (
-      <div className="min-h-screen bg-gray-100 py-8">
-        <div className="max-w-2xl mx-auto px-4">
-          <div className="text-center mb-8">
-            <h1 className="text-4xl font-bold text-gray-900 mb-2">🏥 Health Wallet</h1>
-            <p className="text-gray-600">Hypergraph Integration (5 Core Functions)</p>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-lg p-6">
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
-              <div className="text-center">
-                <h3 className="text-lg font-semibold text-yellow-800 mb-3">🔐 No Private Spaces Available</h3>
-                <p className="text-yellow-700 mb-4">
-                  You are authenticated but don&apos;t have access to any private spaces yet.
-                </p>
-                <div className="text-left bg-yellow-100 p-4 rounded text-sm text-yellow-800 space-y-2">
-                  <p><strong>Current Status:</strong></p>
-                  <ul className="list-disc list-inside space-y-1">
-                    <li>Authentication: ✅ Authenticated</li>
-                    <li>Private Spaces: {privateSpaces?.length || 0} available</li>
-                    <li>Configured Space: {HYPERGRAPH_CONFIG.privateSpaceId}</li>
-                  </ul>
-                  <p className="mt-3"><strong>To fix this:</strong></p>
-                  <ol className="list-decimal list-inside space-y-1">
-                    <li>You need to create a private space or get access to one</li>
-                    <li>Contact your Hypergraph admin to get access</li>
-                    <li>Or check the Hypergraph dashboard for space creation options</li>
-                  </ol>
-                </div>
-                <div className="mt-4 text-xs text-yellow-600">
-                  <p>Configured space: <code className="bg-yellow-200 px-1 rounded">{HYPERGRAPH_CONFIG.privateSpaceId}</code></p>
-                  <p>This space is not accessible to your user account.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-  
-  // Use first available private space or fallback to config (even if not ready)
+  // Use first available private space or fallback to config
   const spaceToUse = privateSpaces?.[0]?.id || HYPERGRAPH_CONFIG.privateSpaceId;
   
   return (
