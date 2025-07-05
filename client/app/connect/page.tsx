@@ -22,6 +22,27 @@ import { useUser } from "@/providers/user-provider";
 import { Connection } from "@/lib/services/connections";
 import { useConnections } from "@/lib/hooks/useConnections";
 
+// WHOOP Direct Connection Configuration
+const WHOOP_REDIRECT_URI = "https://996d-83-144-23-156.ngrok-free.app/connect";
+
+const WHOOP_SCOPES = [
+  "offline",
+  "read:recovery",
+  "read:cycles",
+  "read:workout",
+  "read:sleep",
+  "read:profile",
+  "read:body_measurement"
+].join(" ");
+
+interface WhoopTokenResponse {
+  access_token: string;
+  refresh_token: string;
+  expires_in: number;
+  token_type: string;
+  scope: string;
+}
+
 export default function ConnectPage() {
   const [ouraLoading, setOuraLoading] = useState(false);
   const [whoopLoading, setWhoopLoading] = useState(false);
@@ -35,9 +56,10 @@ export default function ConnectPage() {
     height: 812,
   });
 
-  // Add ref to prevent duplicate callback processing
-  const callbackProcessingRef = useRef(false);
-  const processedCodesRef = useRef(new Set<string>());
+  // Direct WHOOP OAuth state
+  const [whoopAuthCode, setWhoopAuthCode] = useState<string | null>(null);
+  const [whoopTokens, setWhoopTokens] = useState<WhoopTokenResponse | null>(null);
+  const [whoopAutoExchangeAttempted, setWhoopAutoExchangeAttempted] = useState(false);
 
   const searchParams = useSearchParams();
   const { user } = useUser();
@@ -53,7 +75,32 @@ export default function ConnectPage() {
     hasAnyConnection
   } = useConnections(user?.wallet_address || null);
 
-  // Handle OAuth callback parameters (Terra for Oura, Whoop backend for Whoop)
+  // Handle Direct WHOOP OAuth callback
+  const handleDirectWhoopCallback = useCallback(async () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get("code");
+    const state = urlParams.get("state");
+
+    if (code && state && !whoopTokens && user?.wallet_address) {
+      console.log("Direct WHOOP callback: Processing OAuth callback");
+      setWhoopAuthCode(code);
+      
+      // Clean up URL parameters
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, '', newUrl);
+    }
+  }, [whoopTokens, user?.wallet_address]);
+
+  // Auto exchange direct WHOOP token when auth code is found
+  useEffect(() => {
+    if (whoopAuthCode && !whoopTokens && !whoopLoading && !whoopAutoExchangeAttempted && user?.wallet_address) {
+      console.log('Starting automatic direct WHOOP token exchange');
+      setWhoopAutoExchangeAttempted(true);
+      handleDirectWhoopTokenExchange(whoopAuthCode);
+    }
+  }, [whoopAuthCode, whoopTokens, whoopLoading, whoopAutoExchangeAttempted, user?.wallet_address]);
+
+  // Handle OAuth callback parameters (Terra for Oura, Direct OAuth for Whoop)
   const handleOAuthCallback = useCallback(async () => {
     // Prevent duplicate processing
     if (callbackProcessingRef.current) {
@@ -63,11 +110,12 @@ export default function ConnectPage() {
 
     const urlParams = new URLSearchParams(window.location.search);
 
-    // Check for Whoop OAuth callback parameters
+    // Check for Whoop OAuth callback parameters (direct OAuth)
     const whoopCode = urlParams.get("code");
     const whoopState = urlParams.get("state");
 
     if (whoopCode && whoopState && user?.wallet_address) {
+
       // Check if user already has a Whoop connection
       if (hasWhoopConnection) {
         console.log("User already has Whoop connection, skipping OAuth callback");
@@ -144,6 +192,7 @@ export default function ConnectPage() {
         // Reset processing flag
         callbackProcessingRef.current = false;
       }
+
       return;
     }
 
@@ -230,6 +279,7 @@ export default function ConnectPage() {
       // Reset processing flag
       callbackProcessingRef.current = false;
     }
+
   }, [user, hasWhoopConnection, hasOuraConnection, refetchConnections, setWaitingForWebhook]);
 
   // Handle OAuth redirect results and callbacks
@@ -304,6 +354,133 @@ export default function ConnectPage() {
     }
   }, [user?.wallet_address, refetchConnections]);
 
+  // Direct WHOOP Token Exchange with Supabase Storage
+  const handleDirectWhoopTokenExchange = async (code: string) => {
+    if (!code || !user?.wallet_address) {
+      toast.error("Missing authorization code or user wallet address");
+      return;
+    }
+    
+    setWhoopLoading(true);
+    console.log(`🚀 Starting direct WHOOP token exchange for user: ${user.wallet_address}`);
+    console.log(`📝 Authorization code: ${code}`);
+    
+    try {
+      // Step 1: Exchange OAuth code for tokens
+      console.log("🔄 Step 1: Exchanging authorization code for access token...");
+      const tokenResponse = await fetch("/api/whoop/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          code: code, 
+          redirectUri: WHOOP_REDIRECT_URI
+        })
+      });
+      
+      const tokenData = await tokenResponse.json();
+      
+      if (tokenData.error) {
+        console.error("❌ Token exchange failed:", tokenData);
+        toast.error(`WHOOP token exchange failed: ${tokenData.error}`);
+        return;
+      }
+
+      console.log("✅ Token exchange successful!");
+      console.log("🔑 Access Token:", tokenData.access_token);
+      console.log("🔄 Refresh Token:", tokenData.refresh_token);
+      console.log("⏰ Expires in:", tokenData.expires_in, "seconds");
+      console.log("🔐 Token Type:", tokenData.token_type);
+      console.log("📋 Scope:", tokenData.scope);
+      console.log("🎯 Full Token Object:", tokenData);
+      
+      setWhoopTokens(tokenData);
+
+      // Step 2: Fetch WHOOP data
+      console.log("🔄 Step 2: Fetching WHOOP data with access token...");
+      const dataResponse = await fetch("/api/whoop/profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accessToken: tokenData.access_token })
+      });
+      
+      const whoopData = await dataResponse.json();
+      
+      if (whoopData.error) {
+        console.error("❌ WHOOP data fetch failed:", whoopData);
+        toast.error(`WHOOP data fetch failed: ${whoopData.error}`);
+        return;
+      }
+
+      console.log("✅ WHOOP data fetch successful!");
+      console.log("📊 WHOOP Data Keys:", Object.keys(whoopData.data || {}));
+      console.log("📅 Fetched at:", whoopData.fetched_at);
+
+      // Step 3: Store connection and data in Supabase
+      console.log("🔄 Step 3: Storing WHOOP data in Supabase...");
+      const storageResponse = await fetch("/api/whoop/store", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          wallet_address: user.wallet_address,
+          tokens: tokenData,
+          whoop_data: whoopData,
+          connection_type: 'direct_oauth'
+        })
+      });
+
+      const storageResult = await storageResponse.json();
+
+      if (storageResult.error) {
+        console.error("❌ Supabase storage failed:", storageResult);
+        toast.error(`Failed to store WHOOP data: ${storageResult.error}`);
+        return;
+      }
+
+      console.log("✅ Supabase storage successful!");
+      console.log("💾 Storage result:", storageResult);
+      console.log("🎉 WHOOP integration completed successfully!");
+      
+      toast.success("WHOOP connected and data stored successfully!");
+      toast.info("Your WHOOP data has been synced to your account.");
+
+      // Set waiting state and refresh connections
+      setWaitingForWebhook(true);
+      setTimeout(refetchConnections, 2000);
+      
+      // Clean up
+      setWhoopAuthCode(null);
+      
+    } catch (err) {
+      console.error('❌ Direct WHOOP integration error:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      toast.error(`Failed to connect WHOOP: ${errorMessage}`);
+    } finally {
+      setWhoopLoading(false);
+      console.log("🏁 WHOOP token exchange process completed");
+    }
+  };
+
+  // Direct WHOOP OAuth initiation
+  const handleDirectWhoopConnect = () => {
+    if (!user?.wallet_address) {
+      toast.error("Please login first to connect your device.");
+      return;
+    }
+
+    console.log("Starting direct WHOOP OAuth flow");
+    
+    // Build the OAuth URL dynamically (same as working whoop page)
+    const authURL = new URL("https://api.prod.whoop.com/oauth/oauth2/auth");
+    authURL.searchParams.set("response_type", "code");
+    authURL.searchParams.set("client_id", process.env.NEXT_PUBLIC_WHOOP_CLIENT_ID!);
+    authURL.searchParams.set("redirect_uri", WHOOP_REDIRECT_URI);
+    authURL.searchParams.set("scope", WHOOP_SCOPES);
+    authURL.searchParams.set("state", Math.random().toString(36).substring(2, 15));
+    
+    console.log("Generated WHOOP OAuth URL:", authURL.toString());
+    window.location.href = authURL.toString();
+  };
+
   const handleOuraConnect = async () => {
     if (!user?.wallet_address) {
       toast.error("Please login first to connect your device.");
@@ -348,44 +525,8 @@ export default function ConnectPage() {
   };
 
   const handleWhoopConnect = async () => {
-    if (!user?.wallet_address) {
-      toast.error("Please login first to connect your device.");
-      return;
-    }
-
-    setWhoopLoading(true);
-    try {
-      const response = await fetch("/api/whoop/connect", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          wallet_address: user.wallet_address,
-        }),
-      });
-
-      console.log("Whoop connection response:", response);
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.details || `HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      if (data.status === "success" && data.auth_url) {
-        setWhoopAuthUrl(data.auth_url);
-        setWhoopDialogOpen(true);
-      } else {
-        throw new Error("Failed to get authentication URL");
-      }
-    } catch (error) {
-      console.error("Whoop connection error:", error);
-      toast.error("Failed to connect Whoop. Please try again.");
-    } finally {
-      setWhoopLoading(false);
-    }
+    // Use direct OAuth approach instead of Terra
+    handleDirectWhoopConnect();
   };
 
   const confirmOuraConnection = () => {
@@ -409,7 +550,10 @@ export default function ConnectPage() {
       icon: string;
     }
   ) => {
-    const isConnected = connection && connection.active;
+    // For WHOOP, also check if we have direct tokens
+    const isConnected = provider === 'whoop' 
+      ? (connection && connection.active) || !!whoopTokens
+      : connection && connection.active;
     const isDisabled = isLoading || ouraLoading || whoopLoading || waitingForWebhook;
 
     return (
@@ -480,8 +624,8 @@ export default function ConnectPage() {
           </div>
         )}
 
-        {/* Waiting for Webhook */}
-        {waitingForWebhook && (
+        {/* Waiting for Processing */}
+        {(waitingForWebhook || whoopLoading) && (
           <div className="w-full max-w-md mx-auto mb-4 flex items-center justify-center gap-2 text-blue-600">
             <CircleNotch className="w-4 h-4 animate-spin" />
             <span>Processing connection...</span>
@@ -518,7 +662,7 @@ export default function ConnectPage() {
         </div>
 
         {/* Connection Summary */}
-        {!connectionsLoading && hasAnyConnection && (
+        {!connectionsLoading && (hasAnyConnection || whoopTokens) && (
           <div className="w-full max-w-md mx-auto mt-8 p-4 bg-white/50 rounded-xl backdrop-blur-sm">
             <h3 className="text-lg font-semibold text-gray-800 mb-3">Your Connections</h3>
             <div className="space-y-2">
@@ -538,11 +682,11 @@ export default function ConnectPage() {
                   )}
                 </div>
               )}
-              {hasWhoopConnection && (
+              {(hasWhoopConnection || whoopTokens) && (
                 <div className="flex items-center gap-2">
                   <CheckCircle className="w-4 h-4 text-green-500" />
                   <span className="text-sm text-gray-700">Whoop device connected</span>
-                  {connections.whoop && (
+                  {connections.whoop ? (
                     <div className="text-xs text-gray-500">
                       Connected on {new Date(connections.whoop.created_at).toLocaleDateString()}
                       {connections.whoop.last_webhook_update && (
@@ -550,6 +694,10 @@ export default function ConnectPage() {
                           Last update: {new Date(connections.whoop.last_webhook_update).toLocaleDateString()}
                         </div>
                       )}
+                    </div>
+                  ) : whoopTokens && (
+                    <div className="text-xs text-gray-500">
+                      Connected via direct OAuth - Token expires in {Math.floor(whoopTokens.expires_in / 60)} minutes
                     </div>
                   )}
                 </div>

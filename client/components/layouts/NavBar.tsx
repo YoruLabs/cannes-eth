@@ -51,6 +51,12 @@ export default function NavBar({
       path: "/profile",
       isActive: pathname === "/profile",
     },
+    {
+      icon: User,
+      label: "Profile",
+      path: "/hypergraph",
+      isActive: pathname === "/hypergraph",
+    },
   ];
 
   const handleNavigation = (path: string) => {
