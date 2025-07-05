@@ -8,10 +8,16 @@
     "dev": "nodemon src/index.js",
     "test:webhook": "node test-webhook.js",
     "test:supabase": "node test-supabase-integration.js",
+    "test:challenges": "node test-challenges.js",
     "lint": "eslint src/ --ext .js",
     "lint:fix": "eslint src/ --ext .js --fix",
     "format": "prettier --write src/",
-    "format:check": "prettier --check src/"
+    "format:check": "prettier --check src/",
+    "challenge:create": "node scripts/create-challenge.js",
+    "challenge:list": "node scripts/list-challenges.js",
+    "challenge:view": "node scripts/view-challenge.js",
+    "challenge:start": "node scripts/start-challenge.js",
+    "challenge:finish": "node scripts/finish-challenge.js"
   },
   "keywords": [
     "terra",
@@ -19,7 +25,9 @@
     "sleep",
     "health",
     "supabase",
-    "fastify"
+    "fastify",
+    "blockchain",
+    "challenges"
   ],
   "author": "",
   "license": "MIT",
@@ -29,6 +37,7 @@
     "dotenv": "^17.0.1",
     "fastify": "^4.24.3",
     "terra-api": "^1.0.0",
+    "viem": "^2.31.7",
     "winston": "^3.11.0",
     "zod": "^3.22.4"
   },

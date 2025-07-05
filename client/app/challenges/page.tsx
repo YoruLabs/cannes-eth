@@ -14,7 +14,8 @@ export default function ChallengesPage() {
     isConnected, 
     address, 
     wldBalance, 
-    getChallengeData
+    getChallengeCounter,
+    getMultipleCombinedChallengeData
   } = useMiniKit();
 
   const [challenges, setChallenges] = useState<any[]>([]);
@@ -50,14 +51,33 @@ export default function ChallengesPage() {
     if (!isCheckingWallet) {
       const loadChallenges = async () => {
         try {
-          // Load challenge #1 (the one we created with 0.01 WLD)
-          const challenge1 = await getChallengeData(1);
+          console.log('🔍 Loading challenges starting from ID 2...');
           
-          if (challenge1) {
-            setChallenges([challenge1]);
+          // Get total challenge count from blockchain
+          const totalChallenges = await getChallengeCounter();
+          console.log('📊 Total challenges on blockchain:', totalChallenges);
+          
+          // Get challenge IDs starting from 2
+          const challengeIds = [];
+          for (let i = 2; i <= totalChallenges; i++) {
+            challengeIds.push(i);
+          }
+          
+          console.log('📋 Challenge IDs to load:', challengeIds);
+          
+          if (challengeIds.length > 0) {
+            // Get combined data for all challenges
+            const challengeData = await getMultipleCombinedChallengeData(challengeIds);
+            console.log('✅ Loaded challenge data:', challengeData);
+            
+            setChallenges(challengeData);
+          } else {
+            console.log('ℹ️ No challenges found starting from ID 2');
+            setChallenges([]);
           }
         } catch (error) {
-          console.error('Failed to load challenges:', error);
+          console.error('❌ Failed to load challenges:', error);
+          setChallenges([]);
         } finally {
           setLoading(false);
         }
@@ -65,7 +85,7 @@ export default function ChallengesPage() {
 
       loadChallenges();
     }
-  }, [getChallengeData, isCheckingWallet]);
+  }, [getChallengeCounter, getMultipleCombinedChallengeData, isCheckingWallet]);
 
   const getStatusColor = (isActive: boolean, isCompleted: boolean) => {
     if (isCompleted) return 'bg-gray-500 text-white';
@@ -77,6 +97,22 @@ export default function ChallengesPage() {
     if (isCompleted) return 'Completed';
     if (isActive) return 'Active';
     return 'Upcoming';
+  };
+
+  const formatChallengeDescription = (challenge: any) => {
+    // Use database description if available, otherwise use a default based on challenge type
+    if (challenge.description && challenge.description !== 'Complete your health goals to win!') {
+      return challenge.description;
+    }
+    
+    // Generate description based on challenge type
+    if (challenge.challengeType === 'sleep_efficiency') {
+      return `Achieve an average sleep efficiency of ${challenge.targetValue || 85}% or higher over 7 days`;
+    } else if (challenge.challengeType === 'sleep_duration') {
+      return `Sleep ${Math.round((challenge.targetValue || 32400) / 3600)} hours or more per night on average over 7 days`;
+    }
+    
+    return 'Complete your health goals to win!';
   };
 
   if (isCheckingWallet || loading) {
@@ -134,7 +170,7 @@ export default function ChallengesPage() {
                     <div className="p-2 bg-yellow-100 rounded-lg">
                       <Trophy className="w-5 h-5 text-yellow-600" />
                     </div>
-                    <h3 className="text-lg font-semibold text-gray-800">{challenge.name}</h3>
+                    <h3 className="text-lg font-semibold text-gray-800">{challenge.title}</h3>
                   </div>
                   <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(challenge.isActive, challenge.isCompleted)}`}>
                     {getStatusText(challenge.isActive, challenge.isCompleted)}
@@ -142,7 +178,7 @@ export default function ChallengesPage() {
                 </div>
 
                 <p className="text-gray-600 text-sm mb-6">
-                  Walk 10,000 steps every day for 7 days straight. Prove your dedication to healthy living!
+                  {formatChallengeDescription(challenge)}
                 </p>
 
                 <div className="space-y-4 mb-6">
@@ -174,11 +210,23 @@ export default function ChallengesPage() {
                     <div className="flex items-center gap-2">
                       <Calendar className="w-4 h-4 text-purple-500" />
                       <span className="text-gray-600 text-sm">
-                        {challenge.isCompleted ? 'Challenge completed' : 
+                        {challenge.canJoinNow ? '🟢 Can join now!' : 
+                         challenge.isCompleted ? 'Challenge completed' : 
                          challenge.isActive ? 'Challenge is active' : 'Challenge upcoming'}
                       </span>
                     </div>
                   </div>
+
+                  {/* Sleep Challenge Specific Info */}
+                  {challenge.metricType && (
+                    <div className="pt-2 border-t border-gray-200">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-500">
+                          📊 Sleep Metric: {challenge.metricType} ({challenge.targetValue} {challenge.targetUnit})
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <button
