@@ -1,21 +1,50 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.19;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
+
+// Permit2 interface for signature transfers
+interface ISignatureTransfer {
+    struct TokenPermissions {
+        address token;
+        uint256 amount;
+    }
+
+    struct PermitTransferFrom {
+        TokenPermissions permitted;
+        uint256 nonce;
+        uint256 deadline;
+    }
+
+    struct SignatureTransferDetails {
+        address to;
+        uint256 requestedAmount;
+    }
+
+    function permitTransferFrom(
+        PermitTransferFrom memory permit,
+        SignatureTransferDetails calldata transferDetails,
+        address owner,
+        bytes calldata signature
+    ) external;
+}
 
 /**
  * @title HealthChallengePool
  * @dev Simplified contract for health challenges - metadata handled by backend
  */
-contract HealthChallengePool is ReentrancyGuard, Ownable {
+contract HealthChallengePool is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
     using ECDSA for bytes32;
 
+    // Permit2 contract address (same on all chains)
+    address public constant PERMIT2_ADDRESS = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
+    
     // WLD Token contract
     IERC20 public immutable wldToken;
     
@@ -34,9 +63,13 @@ contract HealthChallengePool is ReentrancyGuard, Ownable {
         uint256 winnerCount;
         bool isActive;
         bool isCompleted;
+        
+        // Participants tracking
         mapping(address => bool) participants;
-        mapping(address => bool) winners;
         address[] participantList;
+        
+        // Winners tracking
+        mapping(address => bool) winners;
         address[] winnerList;
     }
     
@@ -49,7 +82,7 @@ contract HealthChallengePool is ReentrancyGuard, Ownable {
     // Events
     event ChallengeCreated(uint256 indexed challengeId, uint256 entryFee);
     
-    event UserJoinedChallenge(uint256 indexed challengeId, address indexed user, uint256 amount);
+    event UserJoinedChallenge(uint256 indexed challengeId, address indexed user, uint256 entryFee);
     
     event ChallengeCompleted(uint256 indexed challengeId, uint256 winnerCount, uint256 prizePerWinner);
     
@@ -83,7 +116,7 @@ contract HealthChallengePool is ReentrancyGuard, Ownable {
     }
     
     /**
-     * @dev Join a challenge by staking WLD tokens
+     * @dev Join a challenge by staking WLD tokens (traditional method)
      */
     function joinChallenge(uint256 _challengeId) external nonReentrant {
         Challenge storage challenge = challenges[_challengeId];
@@ -94,6 +127,45 @@ contract HealthChallengePool is ReentrancyGuard, Ownable {
         
         // Transfer WLD tokens from user to contract
         wldToken.safeTransferFrom(msg.sender, address(this), challenge.entryFee);
+        
+        // Add user to challenge
+        challenge.participants[msg.sender] = true;
+        challenge.participantList.push(msg.sender);
+        challenge.participantCount++;
+        challenge.totalPool += challenge.entryFee;
+        
+        // Track user's challenges
+        userChallenges[msg.sender].push(_challengeId);
+        
+        emit UserJoinedChallenge(_challengeId, msg.sender, challenge.entryFee);
+    }
+
+    /**
+     * @dev Join a challenge using Permit2 signature transfer
+     */
+    function joinChallengeWithPermit2(
+        uint256 _challengeId,
+        ISignatureTransfer.PermitTransferFrom calldata permit,
+        ISignatureTransfer.SignatureTransferDetails calldata transferDetails,
+        bytes calldata signature
+    ) external nonReentrant {
+        Challenge storage challenge = challenges[_challengeId];
+        
+        require(challenge.isActive, "Challenge is not active");
+        require(!challenge.isCompleted, "Challenge is already completed");
+        require(!challenge.participants[transferDetails.to], "Already joined this challenge");
+        require(permit.permitted.token == address(wldToken), "Invalid token");
+        require(permit.permitted.amount >= challenge.entryFee, "Insufficient permit amount");
+        require(transferDetails.requestedAmount == challenge.entryFee, "Invalid transfer amount");
+        require(transferDetails.to == address(this), "Invalid transfer recipient");
+        
+        // Use Permit2 to transfer tokens
+        ISignatureTransfer(PERMIT2_ADDRESS).permitTransferFrom(
+            permit,
+            transferDetails,
+            msg.sender, // owner of the tokens
+            signature
+        );
         
         // Add user to challenge
         challenge.participants[msg.sender] = true;

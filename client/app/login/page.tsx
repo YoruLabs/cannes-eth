@@ -103,13 +103,13 @@ export default function LoginPage() {
   }, []);
 
   /* --------------------------------------------------
-   * Redirect once authenticated
+   * Redirect once authenticated - REMOVED TO PREVENT INFINITE LOOP
    * -------------------------------------------------- */
-  useEffect(() => {
-    if (user) {
-      router.push("/");
-    }
-  }, [user, router]);
+  // useEffect(() => {
+  //   if (user) {
+  //     router.push("/");
+  //   }
+  // }, [user, router]);
 
   /* --------------------------------------------------
    * Poll for World App / MiniKit installation (skip in test mode)
@@ -205,13 +205,13 @@ export default function LoginPage() {
       const res = await fetch("/api/nonce");
       const { nonce } = await res.json();
 
-      // 2️⃣  Ask wallet to sign-in
+      // 2️⃣  Ask wallet to sign-in (this populates MiniKit.user)
       const { finalPayload } = await MiniKit.commandsAsync.walletAuth({
         nonce,
         requestId: "0",
         expirationTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
         notBefore: new Date(Date.now() - 24 * 60 * 60 * 1000),
-        statement: "Sign in to AILingo",
+        statement: "Sign in to Health Challenge",
       });
 
       if (finalPayload.status === "error") {
@@ -232,7 +232,12 @@ export default function LoginPage() {
         const username = MiniKit.user?.username ?? "";
         const walletAddress = finalPayload.address;
 
+        // 4️⃣  Login with backend (this should preserve MiniKit.user state)
         const userData = await login(walletAddress, username);
+
+        // 5️⃣  Verify MiniKit connection is working
+        console.log("🔗 MiniKit user after login:", MiniKit.user);
+        console.log("🔗 Wallet address from MiniKit:", MiniKit.user?.walletAddress);
 
         const welcome = userData.is_verified
           ? `Welcome back, ${username || "User"}!`

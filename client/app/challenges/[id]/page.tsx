@@ -10,11 +10,11 @@ import {
   ArrowLeft,
   CheckCircle,
   Warning,
-  Wallet,
-  SignOut
+  Wallet
 } from "phosphor-react";
 import NavBar from "../../../components/layouts/NavBar";
-import { useWeb3 } from "../../../hooks/useWeb3";
+import { useMiniKit } from "../../../hooks/useMiniKit";
+import { HEALTH_CHALLENGE_ADDRESS, WLD_TOKEN_ADDRESS } from "@/lib/web3";
 
 export default function ChallengePage() {
   const params = useParams();
@@ -24,14 +24,10 @@ export default function ChallengePage() {
     address, 
     wldBalance, 
     isLoading: web3Loading,
-    isManualConnection,
-    connectWallet,
-    connectDeployerAddress,
-    disconnectWallet,
     getChallengeData,
     joinChallenge,
     completeChallenge
-  } = useWeb3();
+  } = useMiniKit();
 
   const [challenge, setChallenge] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -62,7 +58,7 @@ export default function ChallengePage() {
 
   const handleJoinChallenge = async () => {
     if (!isConnected) {
-      alert("Please connect your wallet first!");
+      alert("Please open this in the World App to connect your wallet!");
       return;
     }
 
@@ -73,7 +69,7 @@ export default function ChallengePage() {
       
       if (result.success) {
         setHasJoined(true);
-        alert(`Successfully joined "${challenge.name}"! Transaction: ${result.txHash}`);
+        alert(`Successfully joined "${challenge.name}"! Transaction: ${result.txId}`);
         
         // Refresh challenge data
         const updatedChallenge = await getChallengeData(challengeId);
@@ -93,7 +89,7 @@ export default function ChallengePage() {
 
   const handleCompleteChallenge = async () => {
     if (!isConnected) {
-      alert("Please connect your wallet first!");
+      alert("Please open this in the World App to connect your wallet!");
       return;
     }
 
@@ -103,7 +99,7 @@ export default function ChallengePage() {
       const result = await completeChallenge(challengeId);
       
       if (result.success) {
-        alert(`Successfully completed "${challenge.name}"! Transaction: ${result.txHash}`);
+        alert(`Successfully completed "${challenge.name}"! Transaction: ${result.txId}`);
         
         // Refresh challenge data
         const updatedChallenge = await getChallengeData(challengeId);
@@ -224,15 +220,19 @@ export default function ChallengePage() {
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-blue-700">Contract:</span>
-                    <span className="text-blue-900 font-mono text-xs">0x79399A62F79484171c9a324833F01Bf62a4E1f98</span>
+                    <span className="text-blue-900 font-mono text-xs">{HEALTH_CHALLENGE_ADDRESS}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-blue-700">Network:</span>
-                    <span className="text-blue-900">World Chain Sepolia</span>
+                    <span className="text-blue-900">World Chain Mainnet</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-blue-700">Challenge ID:</span>
                     <span className="text-blue-900">{challenge.id}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-blue-700">WLD Token:</span>
+                    <span className="text-blue-900 font-mono text-xs">{WLD_TOKEN_ADDRESS}</span>
                   </div>
                 </div>
               </div>
@@ -285,25 +285,14 @@ export default function ChallengePage() {
               <div className="bg-white rounded-xl p-6 shadow-sm">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
                   <Wallet className="w-5 h-5 text-purple-500" />
-                  Wallet
+                  World App Wallet
                 </h3>
                 
                 {isConnected ? (
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <CheckCircle className="w-5 h-5 text-green-500" weight="fill" />
-                        <span className="text-green-700">
-                          {isManualConnection ? 'Manual Connection' : 'MetaMask Connected'}
-                        </span>
-                      </div>
-                      <button
-                        onClick={disconnectWallet}
-                        className="p-1 text-gray-400 hover:text-red-500 transition-colors"
-                        title="Disconnect"
-                      >
-                        <SignOut className="w-4 h-4" />
-                      </button>
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="w-5 h-5 text-green-500" weight="fill" />
+                      <span className="text-green-700">Connected</span>
                     </div>
                     
                     <div className="bg-gray-50 rounded-lg p-3">
@@ -324,44 +313,15 @@ export default function ChallengePage() {
                         <span className="text-red-700 text-sm">Insufficient WLD</span>
                       </div>
                     )}
-
-                    {isManualConnection && (
-                      <div className="flex items-center gap-2 p-3 bg-yellow-50 rounded-lg">
-                        <Warning className="w-5 h-5 text-yellow-500" />
-                        <span className="text-yellow-700 text-sm">
-                          Manual connection - transactions disabled
-                        </span>
-                      </div>
-                    )}
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    <button
-                      onClick={connectWallet}
-                      className="w-full bg-purple-500 text-white py-3 rounded-lg hover:bg-purple-600 transition-colors"
-                    >
-                      Connect MetaMask
-                    </button>
-                    
-                    <div className="relative">
-                      <div className="absolute inset-0 flex items-center">
-                        <div className="w-full border-t border-gray-200" />
-                      </div>
-                      <div className="relative flex justify-center text-xs">
-                        <span className="bg-white px-2 text-gray-500">or</span>
-                      </div>
+                    <div className="flex items-center gap-2 p-3 bg-yellow-50 rounded-lg">
+                      <Warning className="w-5 h-5 text-yellow-500" />
+                      <span className="text-yellow-700 text-sm">
+                        Please open this app in the World App to connect your wallet
+                      </span>
                     </div>
-                    
-                    <button
-                      onClick={connectDeployerAddress}
-                      className="w-full bg-green-500 text-white py-3 rounded-lg hover:bg-green-600 transition-colors"
-                    >
-                      Connect Deployer Address
-                    </button>
-                    
-                    <p className="text-xs text-gray-500 text-center">
-                      Deployer address has 1,000,000 WLD tokens for testing
-                    </p>
                   </div>
                 )}
               </div>

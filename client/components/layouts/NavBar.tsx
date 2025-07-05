@@ -48,8 +48,8 @@ export default function NavBar({
     {
       icon: User,
       label: "Profile",
-      path: "/whoop",
-      isActive: pathname === "/whoop",
+      path: "/profile",
+      isActive: pathname === "/profile",
     },
   ];
 

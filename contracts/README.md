@@ -1,303 +1,189 @@
-# Health Challenge Pool - WLD Token Staking System
+# HealthChallengePool Contract Scripts
 
-A decentralized health challenge platform where users stake WLD tokens and compete in health-related challenges. Winners share the prize pool based on verified completion data from wearable devices like Oura rings.
+This directory contains Forge scripts and bash utilities for deploying and managing the HealthChallengePool contract.
 
-## 🏆 System Overview
+## Overview
 
-The Health Challenge Pool allows:
+The HealthChallengePool contract allows users to create health challenges, join them by staking WLD tokens, and complete them with proper backend signature verification.
 
-- **Challenge Creation**: Admins create health challenges (steps, sleep, heart rate, etc.)
-- **Staking**: Users stake WLD tokens to enter challenges
-- **Verification**: Backend verifies completion using signed data from wearables
-- **Prize Distribution**: Winners automatically share the total prize pool
+## Scripts
 
-## 📋 Smart Contracts
+### 1. Finish Challenge CLI Script
 
-### HealthChallengePool.sol
+**File:** `finish_challenge.sh`
 
-Main contract handling:
+A command-line tool to complete challenges from the terminal.
 
-- Challenge lifecycle management
-- WLD token staking and prize distribution
-- Cryptographic verification of challenge completion
-- User participation tracking
-
-### MockWLDToken.sol
-
-Mock WLD token for testing (replace with real WLD token address in production)
-
-## 🔧 Key Features
-
-### Challenge Types Supported
-
-- **Steps**: Daily step count goals (e.g., 10,000 steps/day)
-- **Sleep**: Sleep quality/duration targets
-- **Heart Rate**: Heart rate zone training
-- **Custom**: Any health metric your backend can verify
-
-### Security Features
-
-- **Signature Verification**: Backend signs winner data with private key
-- **Reentrancy Protection**: Safe from reentrancy attacks
-- **Access Control**: Only admins can create/cancel challenges
-- **Participant Validation**: Only participants can win prizes
-
-### Gas Optimization Notes
-
-⚠️ **For Loop Consideration**: The contract contains for loops in prize distribution and cancellation functions. For production with many participants, consider:
-
-- Batch processing for large winner lists
-- Pagination for refunds
-- Gas limit considerations for challenge sizes
-
-## 🚀 Deployment
-
-### Deploy to World Chain Sepolia
+#### Usage
 
 ```bash
-# Load environment variables
-source .env
-
-# Deploy contracts
-forge script script/DeployHealthChallenge.s.sol:DeployHealthChallengeScript \
-  --rpc-url worldchain_sepolia \
-  --private-key $PRIVATE_KEY \
-  --broadcast
+./finish_challenge.sh [network] [challenge_id] [winners_comma_separated]
 ```
 
-### Deploy to World Chain Mainnet
+#### Examples
 
 ```bash
-forge script script/DeployHealthChallenge.s.sol:DeployHealthChallengeScript \
-  --rpc-url worldchain_mainnet \
-  --private-key $PRIVATE_KEY \
-  --broadcast
+# Finish challenge #1 on sepolia with one winner
+./finish_challenge.sh sepolia 1 "0xeB780C963C700639f16CD09b4CF4F5c6Bc952730"
+
+# Finish challenge #2 on mainnet with multiple winners
+./finish_challenge.sh mainnet 2 "0x123...,0x456...,0x789..."
 ```
 
-## 📖 Usage Examples
+#### Prerequisites
 
-### 1. Create a Challenge
+1. Create a `.env` file with your private key:
 
-```solidity
-// Admin creates a 7-day step challenge
-challengePool.createChallenge(
-    "10K Steps Challenge",
-    "Walk 10,000 steps daily for 7 days",
-    "steps",
-    10 * 10**18, // 10 WLD entry fee
-    block.timestamp + 1 hours, // Start in 1 hour
-    block.timestamp + 8 days   // End in 8 days
-);
-```
+   ```
+   PRIVATE_KEY=0xddfc19cf4d3f82685d82fe4f3fd9d7c8998695bfc8bf3dc2550254196aeddddc
+   ```
 
-### 2. Join a Challenge
+2. Make sure you have forge installed and configured
 
-```solidity
-// User approves WLD spending
-wldToken.approve(address(challengePool), entryFee);
+3. For mainnet: Update the `CHALLENGE_POOL_ADDRESS` in the script with your deployed contract address
 
-// User joins challenge
-challengePool.joinChallenge(1); // Challenge ID 1
-```
+### 2. Mainnet Deployment Script
 
-### 3. Verify Winners (Backend)
+**File:** `deploy_mainnet.sh`
 
-```javascript
-// Backend verifies challenge completion and creates signature
-const winners = ["0x123...", "0x456..."]; // Addresses of users who completed challenge
-const challengeId = 1;
+Deploys the HealthChallengePool contract to World Chain mainnet using the real WLD token.
 
-// Create message hash
-const messageHash = ethers.utils.solidityKeccak256(
-  ["uint256", "address[]"],
-  [challengeId, winners]
-);
-
-// Sign with backend private key
-const signature = await backendWallet.signMessage(
-  ethers.utils.arrayify(messageHash)
-);
-
-// Call contract to distribute prizes
-await challengePool.verifyAndDistributePrizes(challengeId, winners, signature);
-```
-
-## 🧪 Testing
-
-Run comprehensive tests:
+#### Usage
 
 ```bash
-# Run all tests
-forge test -vv
-
-# Run specific test
-forge test --match-test testVerifyAndDistributePrizes -vvv
-
-# Generate gas report
-forge test --gas-report
+./deploy_mainnet.sh
 ```
 
-### Test Coverage
+#### Prerequisites
 
-- ✅ Challenge creation and management
-- ✅ User participation and staking
-- ✅ Signature verification
-- ✅ Prize distribution
-- ✅ Access control
-- ✅ Edge cases and error conditions
+1. **Update WLD Token Address**: Before deploying, you must update the `WLD_TOKEN_ADDRESS` in `script/DeployHealthChallengeMainnet.s.sol` with the actual WLD token address on World Chain mainnet.
 
-## 🔐 Backend Integration
+2. **Environment Setup**: Create a `.env` file with your private key:
 
-### Signature Generation (Node.js Example)
+   ```
+   PRIVATE_KEY=your_private_key_here
+   ```
 
-```javascript
-const ethers = require("ethers");
+3. **Funds**: Ensure you have sufficient ETH on World Chain mainnet for gas fees.
 
-class HealthChallengeBackend {
-  constructor(privateKey) {
-    this.wallet = new ethers.Wallet(privateKey);
-  }
+#### Steps
 
-  async verifyChallenge(challengeId, participants, healthData) {
-    // Your health data verification logic here
-    // Check Oura API, validate step counts, sleep data, etc.
+1. Find the official WLD token address on World Chain mainnet
+2. Update `WLD_TOKEN_ADDRESS` in `script/DeployHealthChallengeMainnet.s.sol`
+3. Run the deployment script
+4. Update frontend configuration with the new contract address
+5. Update `finish_challenge.sh` with the new contract address
 
-    const winners = participants.filter((participant) =>
-      this.meetsChallengeCriteria(participant, healthData)
-    );
+### 3. Forge Scripts
 
-    return this.signWinners(challengeId, winners);
-  }
+#### FinishChallenge.s.sol
 
-  async signWinners(challengeId, winners) {
-    const messageHash = ethers.utils.solidityKeccak256(
-      ["uint256", "address[]"],
-      [challengeId, winners]
-    );
+Core forge script that handles challenge completion with proper signature generation.
 
-    const signature = await this.wallet.signMessage(
-      ethers.utils.arrayify(messageHash)
-    );
+**Environment Variables:**
 
-    return { winners, signature };
-  }
+- `PRIVATE_KEY`: Backend signer private key
+- `CHALLENGE_POOL_ADDRESS`: Address of the deployed contract
+- `CHALLENGE_ID`: ID of the challenge to complete
+- `WINNERS`: Comma-separated list of winner addresses
 
-  meetsChallengeCriteria(participant, healthData) {
-    // Implement your challenge criteria logic
-    // Example: Check if user achieved 10k steps for 7 days
-    return healthData[participant].completedChallenge;
-  }
-}
-```
+#### DeployHealthChallengeMainnet.s.sol
 
-### Oura Integration Example
+Deployment script for World Chain mainnet using real WLD tokens.
 
-```javascript
-// Example integration with Oura API
-async function getOuraStepData(userId, startDate, endDate) {
-  const response = await fetch(
-    `https://api.ouraring.com/v2/usercollection/daily_activity`,
-    {
-      headers: {
-        Authorization: `Bearer ${ouraToken}`,
-      },
-      params: {
-        start_date: startDate,
-        end_date: endDate,
-      },
-    }
-  );
+**Features:**
 
-  const data = await response.json();
-  return data.data.map((day) => day.steps);
-}
+- Uses real WLD token instead of MockWLD
+- Provides deployment summary and next steps
+- Includes network detection and explorer links
 
-async function verifyStepChallenge(userId, requiredSteps, challengeDays) {
-  const stepData = await getOuraStepData(userId, startDate, endDate);
-  const completedDays = stepData.filter(
-    (steps) => steps >= requiredSteps
-  ).length;
+## Network Configuration
 
-  return completedDays >= challengeDays;
-}
-```
+### Sepolia Testnet
 
-## 🏗️ Architecture
-
-```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   Frontend      │    │    Backend       │    │  Smart Contract │
-│   (User App)    │    │  (Verification)  │    │ (Prize Pool)    │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-         │                       │                       │
-         │ 1. Join Challenge     │                       │
-         ├──────────────────────────────────────────────→│
-         │                       │                       │
-         │ 2. Submit Health Data │                       │
-         ├──────────────────────→│                       │
-         │                       │                       │
-         │                       │ 3. Verify & Sign     │
-         │                       ├──────────────────────→│
-         │                       │                       │
-         │ 4. Receive Prize      │                       │
-         │←──────────────────────────────────────────────┤
-```
-
-## 🔒 Security Considerations
-
-1. **Private Key Management**: Keep backend signing key secure
-2. **Signature Validation**: Always verify signatures on-chain
-3. **Access Control**: Only authorized addresses can create challenges
-4. **Reentrancy Protection**: Built-in protection against reentrancy attacks
-5. **Input Validation**: All inputs are validated before processing
-
-## 📊 Gas Costs (Approximate)
-
-| Function                   | Gas Cost               |
-| -------------------------- | ---------------------- |
-| Create Challenge           | ~290k                  |
-| Join Challenge             | ~490k                  |
-| Verify Winners (2 winners) | ~850k                  |
-| Cancel Challenge           | Varies by participants |
-
-## 🌐 Network Information
-
-### World Chain Sepolia Testnet
-
+- **RPC URL**: `https://worldchain-sepolia.g.alchemy.com/public`
 - **Chain ID**: 4801
-- **RPC**: Your Alchemy endpoint
 - **Explorer**: https://worldchain-sepolia.explorer.alchemy.com
+- **Contract Address**: `0x79399A62F79484171c9a324833F01Bf62a4E1f98`
 
-### World Chain Mainnet
+### Mainnet
 
+- **RPC URL**: `https://worldchain-mainnet.g.alchemy.com/public`
 - **Chain ID**: 480
-- **RPC**: Your Alchemy endpoint
 - **Explorer**: https://worldscan.org
+- **Contract Address**: To be deployed
 
-## 🤝 Contributing
+## Finding the WLD Token Address
 
-1. Fork the repository
-2. Create your feature branch
-3. Add comprehensive tests
-4. Ensure all tests pass
-5. Submit a pull request
+To find the official WLD token address on World Chain mainnet:
 
-## 📄 License
+1. Check the official World documentation: https://docs.world.org
+2. Look for "Useful Contract Deployments" section
+3. Check World Chain explorer: https://worldscan.org
+4. Verify with the World team or community
 
-MIT License - see LICENSE file for details
+**Important**: Make sure you're using the official WLD token address and not a fake or wrapped version.
 
-## 🆘 Support
+## Security Considerations
 
-- **Telegram**: @worldcoindevelopers
-- **Documentation**: Check official World Chain docs
-- **Issues**: Create GitHub issues for bugs/features
+1. **Private Keys**: Never commit private keys to git. Use `.env` files and add them to `.gitignore`.
 
----
+2. **Backend Signer**: For production, use a separate backend signer key instead of the deployer key.
 
-**⚠️ Important**: This is a demo implementation. For production use:
+3. **Signature Verification**: The contract verifies signatures to ensure only authorized completions.
 
-- Replace MockWLDToken with real WLD token address
-- Implement proper backend authentication
-- Add additional security measures
-- Consider gas optimization for large participant lists
-- Implement proper error handling and monitoring
+4. **Testing**: Always test on testnet before mainnet deployment.
+
+## Troubleshooting
+
+### Common Issues
+
+1. **"execution reverted"**: Usually means invalid signature or challenge state
+2. **"PRIVATE_KEY not found"**: Check your `.env` file exists and has the right format
+3. **"Insufficient funds"**: Make sure you have enough ETH for gas fees
+4. **"Contract not found"**: Verify the contract address is correct for your network
+
+### Debugging
+
+Use cast to inspect contract state:
+
+```bash
+# Check challenge details
+cast call $CONTRACT_ADDRESS "getChallengeDetails(uint256)" $CHALLENGE_ID --rpc-url $RPC_URL
+
+# Check if address is backend signer
+cast call $CONTRACT_ADDRESS "backendSigner()" --rpc-url $RPC_URL
+```
+
+## Example Workflow
+
+1. **Deploy to Mainnet**:
+
+   ```bash
+   # Update WLD token address first
+   ./deploy_mainnet.sh
+   ```
+
+2. **Create a Challenge** (via frontend or direct contract call)
+
+3. **Users Join Challenge** (via frontend)
+
+4. **Complete Challenge**:
+
+   ```bash
+   ./finish_challenge.sh mainnet 1 "0xwinner1,0xwinner2"
+   ```
+
+5. **Verify Completion**:
+   ```bash
+   cast call $CONTRACT_ADDRESS "getChallengeDetails(uint256)" 1 --rpc-url $RPC_URL
+   ```
+
+## Support
+
+For issues or questions:
+
+- Check the contract tests in `test/`
+- Review the contract source in `src/`
+- Consult World Chain documentation
+- Ask in the project Discord/Telegram

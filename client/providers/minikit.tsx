@@ -13,6 +13,8 @@ export function MiniKitProvider({ children }: { children: ReactNode }) {
 
     try {
       console.log("Initializing MiniKit...");
+      
+      // Install MiniKit - configuration is done through the World Developer Portal
       MiniKit.install();
       
       // Small delay to ensure installation is complete

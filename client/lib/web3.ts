@@ -1,5 +1,4 @@
 import { createPublicClient, createWalletClient, custom, http } from 'viem';
-import { defineChain } from 'viem';
 
 // Extend Window interface for ethereum
 declare global {
@@ -8,11 +7,11 @@ declare global {
   }
 }
 
-// Define World Chain Sepolia
-export const worldChainSepolia = defineChain({
-  id: 4801,
-  name: 'World Chain Sepolia',
-  network: 'worldchain-sepolia',
+// Custom World Chain Mainnet configuration
+export const worldchainMainnet = {
+  id: 480,
+  name: 'World Chain Mainnet',
+  network: 'worldchain-mainnet',
   nativeCurrency: {
     decimals: 18,
     name: 'Ether',
@@ -20,43 +19,46 @@ export const worldChainSepolia = defineChain({
   },
   rpcUrls: {
     default: {
-      http: ['https://worldchain-sepolia.g.alchemy.com/public'],
+      http: ['https://worldchain-mainnet.g.alchemy.com/public'],
     },
     public: {
-      http: ['https://worldchain-sepolia.g.alchemy.com/public'],
+      http: ['https://worldchain-mainnet.g.alchemy.com/public'],
     },
   },
   blockExplorers: {
-    default: {
-      name: 'World Chain Sepolia Explorer',
-      url: 'https://worldchain-sepolia.explorer.alchemy.com',
-    },
+    default: { name: 'WorldScan', url: 'https://worldscan.org' },
   },
-  testnet: true,
-});
+} as const;
 
-// Create public client for reading blockchain data
+// Contract addresses for World Chain Mainnet
+export const HEALTH_CHALLENGE_ADDRESS = '0xB36b82E2090D574Dfd5f3bCc835af09A3De8fb1F' as `0x${string}`;
+export const WLD_TOKEN_ADDRESS = '0x2cFc85d8E48F8EAB294be644d9E25C3030863003' as `0x${string}`;
+
+// Network configuration
+export const NETWORK_CONFIG = {
+  chain: worldchainMainnet,
+  rpcUrl: 'https://worldchain-mainnet.g.alchemy.com/public',
+  explorerUrl: 'https://worldscan.org',
+} as const;
+
+// Create public client for World Chain Mainnet
 export const publicClient = createPublicClient({
-  chain: worldChainSepolia,
-  transport: http(),
+  chain: worldchainMainnet,
+  transport: http('https://worldchain-mainnet.g.alchemy.com/public'),
 });
 
-// Create wallet client for transactions (will be created with window.ethereum)
+// Create wallet client from window (MetaMask)
 export const createWalletClientFromWindow = () => {
   if (typeof window !== 'undefined' && window.ethereum) {
     return createWalletClient({
-      chain: worldChainSepolia,
+      chain: worldchainMainnet,
       transport: custom(window.ethereum),
     });
   }
   return null;
 };
 
-// Contract addresses - Updated with new deployment
-export const HEALTH_CHALLENGE_ADDRESS = '0x79399A62F79484171c9a324833F01Bf62a4E1f98' as const;
-export const WLD_TOKEN_ADDRESS = '0xAb9f2cdB64F838557050c397f5fBE42A145C6C61' as const;
-
-// Contract ABIs - Updated for simplified contract
+// Contract ABIs
 export const HEALTH_CHALLENGE_ABI = [
   {
     type: 'function',
@@ -84,6 +86,40 @@ export const HEALTH_CHALLENGE_ABI = [
     type: 'function',
     name: 'joinChallenge',
     inputs: [{ name: '_challengeId', type: 'uint256' }],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'joinChallengeWithPermit2',
+    inputs: [
+      { name: '_challengeId', type: 'uint256' },
+      { 
+        name: 'permit', 
+        type: 'tuple',
+        components: [
+          {
+            name: 'permitted',
+            type: 'tuple',
+            components: [
+              { name: 'token', type: 'address' },
+              { name: 'amount', type: 'uint256' }
+            ]
+          },
+          { name: 'nonce', type: 'uint256' },
+          { name: 'deadline', type: 'uint256' }
+        ]
+      },
+      {
+        name: 'transferDetails',
+        type: 'tuple',
+        components: [
+          { name: 'to', type: 'address' },
+          { name: 'requestedAmount', type: 'uint256' }
+        ]
+      },
+      { name: 'signature', type: 'bytes' }
+    ],
     outputs: [],
     stateMutability: 'nonpayable',
   },

@@ -1,20 +1,42 @@
 import { useState, useEffect, useCallback } from 'react';
-import { formatEther, parseEther } from 'viem';
+import { formatEther, parseEther, keccak256, encodePacked } from 'viem';
 import { 
-  publicClient, 
+  publicClient,
   createWalletClientFromWindow, 
-  HEALTH_CHALLENGE_ADDRESS, 
+  HEALTH_CHALLENGE_ADDRESS,
   WLD_TOKEN_ADDRESS,
   HEALTH_CHALLENGE_ABI,
   WLD_TOKEN_ABI 
 } from '../lib/web3';
+import { privateKeyToAccount } from 'viem/accounts';
 
-export const useWeb3 = () => {
+interface UseWeb3Return {
+  // Connection state
+  isConnected: boolean;
+  address: string | null;
+  isLoading: boolean;
+  isManualConnection: boolean;
+  
+  // Balances
+  wldBalance: string;
+  
+  // Connection functions
+  connectWallet: () => Promise<void>;
+  connectDeployerAddress: () => void;
+  disconnectWallet: () => void;
+  
+  // Contract functions
+  getChallengeData: (challengeId: number) => Promise<any>;
+  joinChallenge: (challengeId: number, entryFee: string) => Promise<{ success: boolean; txHash?: string; error?: string }>;
+  completeChallenge: (challengeId: number) => Promise<{ success: boolean; txHash?: string; error?: string }>;
+}
+
+export const useWeb3 = (): UseWeb3Return => {
   const [isConnected, setIsConnected] = useState(false);
-  const [address, setAddress] = useState<string>('');
-  const [wldBalance, setWldBalance] = useState<string>('0');
+  const [address, setAddress] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isManualConnection, setIsManualConnection] = useState(false);
+  const [wldBalance, setWldBalance] = useState('0');
 
   // Manual address connection (for testing)
   const connectManualAddress = useCallback((manualAddress: string) => {
@@ -54,11 +76,11 @@ export const useWeb3 = () => {
         setIsConnected(true);
         setIsManualConnection(false);
         
-        // Switch to World Chain Sepolia if not already
+        // Switch to World Chain Mainnet if not already
         try {
           await window.ethereum.request({
             method: 'wallet_switchEthereumChain',
-            params: [{ chainId: '0x12C1' }], // 4801 in hex
+            params: [{ chainId: '0x1E0' }], // 480 in hex
           });
         } catch (switchError: any) {
           // This error code indicates that the chain has not been added to MetaMask
@@ -67,15 +89,15 @@ export const useWeb3 = () => {
               await window.ethereum.request({
                 method: 'wallet_addEthereumChain',
                 params: [{
-                  chainId: '0x12C1',
-                  chainName: 'World Chain Sepolia',
+                  chainId: '0x1E0', // 480 in hex
+                  chainName: 'World Chain Mainnet',
                   nativeCurrency: {
                     name: 'ETH',
                     symbol: 'ETH',
                     decimals: 18,
                   },
-                  rpcUrls: ['https://worldchain-sepolia.g.alchemy.com/public'],
-                  blockExplorerUrls: ['https://worldchain-sepolia.explorer.alchemy.com'],
+                  rpcUrls: ['https://worldchain-mainnet.g.alchemy.com/public'],
+                  blockExplorerUrls: ['https://worldscan.org'],
                 }],
               });
             } catch (addError) {
@@ -103,10 +125,11 @@ export const useWeb3 = () => {
       console.error('Failed to get WLD balance:', error);
       return '0';
     }
-  }, []);
+  }, [WLD_TOKEN_ABI, WLD_TOKEN_ADDRESS]);
 
   // Get challenge data from contract
   const getChallengeData = useCallback(async (challengeId: number) => {
+    console.log('🔍 Getting challenge data for ID:', challengeId);
     try {
       const challenge = await publicClient.readContract({
         address: HEALTH_CHALLENGE_ADDRESS,
@@ -115,7 +138,9 @@ export const useWeb3 = () => {
         args: [BigInt(challengeId)],
       });
       
-      return {
+      console.log('✅ Raw challenge data:', challenge);
+      
+      const challengeData = {
         id: Number(challenge[0]),
         entryFee: formatEther(challenge[1] as bigint),
         totalPool: formatEther(challenge[2] as bigint),
@@ -128,11 +153,16 @@ export const useWeb3 = () => {
         description: 'Complete your health goals to win!',
         challengeType: 'health',
       };
+      
+      console.log('✅ Processed challenge data:', challengeData);
+      return challengeData;
     } catch (error) {
-      console.error('Failed to get challenge data:', error);
+      console.error('❌ Failed to get challenge data:', error);
+      console.error('Challenge ID:', challengeId);
+      console.error('Contract address:', HEALTH_CHALLENGE_ADDRESS);
       return null;
     }
-  }, []);
+  }, [HEALTH_CHALLENGE_ABI, HEALTH_CHALLENGE_ADDRESS]);
 
   // Join challenge
   const joinChallenge = useCallback(async (challengeId: number, stakeAmount: string) => {
@@ -197,9 +227,9 @@ export const useWeb3 = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [address, isManualConnection]);
+  }, [address, isManualConnection, HEALTH_CHALLENGE_ADDRESS, HEALTH_CHALLENGE_ABI, WLD_TOKEN_ABI, WLD_TOKEN_ADDRESS]);
 
-  // Complete challenge (mock signature for now)
+  // Complete challenge (with proper signature generation)
   const completeChallenge = useCallback(async (challengeId: number) => {
     if (isManualConnection) {
       // For manual connections, simulate success but warn user
@@ -215,15 +245,37 @@ export const useWeb3 = () => {
         throw new Error('Wallet not connected');
       }
 
-      // Mock signature and winners for testing
-      const mockWinners = [address as `0x${string}`]; // Current user as winner
-      const mockSignature = '0x0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000';
+      // Winners array - current user as winner
+      const mockWinners = [address as `0x${string}`];
+      
+      // Create message hash - this matches the contract's logic:
+      // bytes32 messageHash = keccak256(abi.encodePacked(_challengeId, _winners));
+      const messageHash = keccak256(
+        encodePacked(
+          ['uint256', 'address[]'],
+          [BigInt(challengeId), mockWinners]
+        )
+      );
+
+      // Get the backend signer's private key from environment variable
+      const backendPrivateKey = process.env.NEXT_PUBLIC_BACKEND_PRIVATE_KEY;
+      if (!backendPrivateKey) {
+        throw new Error('Backend private key not found in environment variables');
+      }
+      
+      // Create account from private key for signing
+      const backendAccount = privateKeyToAccount(backendPrivateKey as `0x${string}`);
+      
+      // Sign the message hash using the backend account
+      const signature = await backendAccount.signMessage({
+        message: { raw: messageHash },
+      });
 
       const completeTx = await walletClient.writeContract({
         address: HEALTH_CHALLENGE_ADDRESS,
         abi: HEALTH_CHALLENGE_ABI,
         functionName: 'completeChallenge',
-        args: [BigInt(challengeId), mockWinners, mockSignature as `0x${string}`],
+        args: [BigInt(challengeId), mockWinners, signature],
         account: address as `0x${string}`,
       });
 
@@ -237,45 +289,7 @@ export const useWeb3 = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [address, isManualConnection]);
-
-  // Create challenge (admin function)
-  const createChallenge = useCallback(async (entryFee: string) => {
-    if (isManualConnection) {
-      // For manual connections, simulate success but warn user
-      alert('Manual connection detected. In a real app, you would need to use your actual wallet to sign transactions.');
-      return { success: false, error: 'Manual connection - transactions not supported' };
-    }
-
-    try {
-      setIsLoading(true);
-      
-      const walletClient = createWalletClientFromWindow();
-      if (!walletClient || !address) {
-        throw new Error('Wallet not connected');
-      }
-
-      const entryFeeWei = parseEther(entryFee);
-
-      const createTx = await walletClient.writeContract({
-        address: HEALTH_CHALLENGE_ADDRESS,
-        abi: HEALTH_CHALLENGE_ABI,
-        functionName: 'createChallenge',
-        args: [entryFeeWei],
-        account: address as `0x${string}`,
-      });
-
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: createTx });
-      console.log('Create challenge successful:', receipt);
-      
-      return { success: true, txHash: createTx };
-    } catch (error) {
-      console.error('Failed to create challenge:', error);
-      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
-    } finally {
-      setIsLoading(false);
-    }
-  }, [address, isManualConnection]);
+  }, [address, isManualConnection, HEALTH_CHALLENGE_ADDRESS, HEALTH_CHALLENGE_ABI]);
 
   // Update balance when address changes
   useEffect(() => {
@@ -307,6 +321,7 @@ export const useWeb3 = () => {
   }, [isManualConnection]);
 
   return {
+    // Connection state
     isConnected,
     address,
     wldBalance,
@@ -314,12 +329,9 @@ export const useWeb3 = () => {
     isManualConnection,
     connectWallet,
     connectDeployerAddress,
-    connectManualAddress,
     disconnectWallet,
     getChallengeData,
     joinChallenge,
     completeChallenge,
-    createChallenge,
-    getWldBalance,
   };
 }; 
