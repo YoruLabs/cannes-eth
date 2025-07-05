@@ -51,6 +51,12 @@ export default function NavBar({
       path: "/whoop",
       isActive: pathname === "/whoop",
     },
+    {
+      icon: User,
+      label: "Profile",
+      path: "/hypergraph",
+      isActive: pathname === "/hypergraph",
+    },
   ];
 
   const handleNavigation = (path: string) => {
