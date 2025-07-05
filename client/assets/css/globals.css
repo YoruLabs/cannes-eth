@@ -3,6 +3,23 @@
 @import "./_scrollbar.css";
 @import "./_preflight.css";
 
+/* Force light mode - prevent dark mode from being applied */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: light !important;
+  }
+}
+
+/* Ensure dark class styles are never applied */
+.dark {
+  /* Disable all dark mode styles */
+  display: none !important;
+}
+
+html {
+  color-scheme: light !important;
+}
+
 @theme {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

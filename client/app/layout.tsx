@@ -50,7 +50,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`light ${geistSans.variable} ${geistMono.variable} ${alexBrush.variable} ${silkscreen.variable}`}>
+    <html 
+      lang="en" 
+      className={`light ${geistSans.variable} ${geistMono.variable} ${alexBrush.variable} ${silkscreen.variable}`}
+      style={{ colorScheme: "light" }}
+    >
       <body
         className={`bg-white text-gray-900 antialiased w-full min-h-screen overflow-x-hidden`}
       >

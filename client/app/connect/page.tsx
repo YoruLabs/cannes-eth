@@ -19,6 +19,7 @@ import MobileScreen from "@/components/layouts/MobileScreen";
 import { FlickeringGrid } from "@/components/magicui/flickering-grid";
 import { CircleNotch } from "phosphor-react";
 import { cn } from "@/lib/utils";
+import { useUser } from "@/providers/user-provider";
 
 export default function ConnectPage() {
   const [ouraLoading, setOuraLoading] = useState(false);
@@ -33,6 +34,7 @@ export default function ConnectPage() {
   });
   
   const searchParams = useSearchParams();
+  const { user } = useUser();
 
   // Handle OAuth redirect results
   useEffect(() => {
@@ -45,6 +47,11 @@ export default function ConnectPage() {
   }, [searchParams]);
 
   const handleOuraConnect = async () => {
+    if (!user?.wallet_address) {
+      toast.error("Please login first to connect your device.");
+      return;
+    }
+
     setOuraLoading(true);
     try {
       const response = await fetch("/api/terra/oura", {
@@ -53,7 +60,7 @@ export default function ConnectPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          reference_id: "my_first_connection",
+          reference_id: user.wallet_address,
           auth_success_redirect_url: `${process.env.NEXT_PUBLIC_APP_ENV === "development" ? "https://world.org/mini-app?app_id=app_58d87e75f86ee1d5774b836e7190153d&path=/connect?success=true" : window.location.origin}/connect?success=true`,
           auth_failure_redirect_url: `${process.env.NEXT_PUBLIC_APP_ENV === "development" ? "https://world.org/mini-app?app_id=app_58d87e75f86ee1d5774b836e7190153d&path=/connect?success=false" : window.location.origin}/connect?success=false`,
         }),
@@ -83,6 +90,11 @@ export default function ConnectPage() {
   };
 
   const handleWhoopConnect = async () => {
+    if (!user?.wallet_address) {
+      toast.error("Please login first to connect your device.");
+      return;
+    }
+
     setWhoopLoading(true);
     try {
       const response = await fetch("/api/terra/whoop", {
@@ -91,7 +103,7 @@ export default function ConnectPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          reference_id: "my_first_connection",
+          reference_id: user.wallet_address,
           auth_success_redirect_url: `${process.env.NEXT_PUBLIC_APP_ENV === "development" ? "https://world.org/mini-app?app_id=app_58d87e75f86ee1d5774b836e7190153d&path=/connect?success=true" : window.location.origin}/connect?success=true`,
           auth_failure_redirect_url: `${process.env.NEXT_PUBLIC_APP_ENV === "development" ? "https://world.org/mini-app?app_id=app_58d87e75f86ee1d5774b836e7190153d&path=/connect?success=false" : window.location.origin}/connect?success=false`,
         }),
@@ -143,15 +155,17 @@ export default function ConnectPage() {
         width={windowDimensions.width}
       />
       
-      <div className="relative z-2 w-full h-screen flex flex-col items-center justify-center pt-24 pb-16">
-        {/* Header */}
-        <div className="absolute top-[15%] left-[7%] flex flex-col items-start justify-center z-2">
-          <div className="text-6xl text-gray-700">Connect</div>
-          <div className="text-lg text-gray-500 mt-2">Link your devices</div>
+      <div className="relative z-2 w-full min-h-screen flex flex-col px-6 pt-16 pb-8">
+        {/* Header Section */}
+        <div className="w-full mb-8">
+          <div className="text-start">
+            <p className="text-4xl font-bold text-gray-800 mb-3">Connect</p>
+            <p className="text-gray-600 mb-6">Link your devices</p>
+          </div>
         </div>
 
         {/* Connection buttons */}
-        <section className="mt-auto space-y-4 w-full max-w-md mx-auto px-6">
+        <div className="w-full max-w-md mx-auto space-y-4">
           {/* Oura Connect Button */}
           <button
             onClick={handleOuraConnect}
@@ -207,16 +221,10 @@ export default function ConnectPage() {
               </>
             )}
           </button>
-        </section>
-
-        {/* Info section */}
-        <div className="mt-8 px-6 w-full max-w-md mx-auto">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <p className="text-blue-800 text-sm text-center">
-              Connect your fitness devices to sync your health data and unlock personalized insights.
-            </p>
-          </div>
         </div>
+
+        {/* Spacer to push content up */}
+        <div className="flex-1"></div>
       </div>
 
       <Toaster />

@@ -12,6 +12,7 @@ import {
   useHypergraphAuth,
   useSpace
 } from '@graphprotocol/hypergraph-react';
+import { Connect } from '@graphprotocol/hypergraph';
 import { Patient, HealthProvider } from '@/lib/hypergraph-schema';
 import { HYPERGRAPH_CONFIG } from '@/lib/hypergraph-config';
 
@@ -73,10 +74,10 @@ function CoreOperations() {
     redirectToConnect({
       storage: localStorage,
       connectUrl: 'https://hypergraph-connect.vercel.app/',
-      successUrl: window.location.origin + '/hypergraph',
+      successUrl: 'https://world.org/mini-app?app_id=app_58d87e75f86ee1d5774b836e7190153d&path=/hypergraph',
       appId: HYPERGRAPH_CONFIG.appId,
       redirectFn: (url: URL) => {
-        window.location.href = url.toString();
+        window.open(url.toString());
       },
     });
   };
@@ -333,7 +334,7 @@ export default function HypergraphPage() {
               <div className="text-center">
                 <h3 className="text-lg font-semibold text-yellow-800 mb-3">🔐 No Private Spaces Available</h3>
                 <p className="text-yellow-700 mb-4">
-                  You're authenticated but don't have access to any private spaces yet.
+                  You are authenticated but don&apos;t have access to any private spaces yet.
                 </p>
                 <div className="text-left bg-yellow-100 p-4 rounded text-sm text-yellow-800 space-y-2">
                   <p><strong>Current Status:</strong></p>
