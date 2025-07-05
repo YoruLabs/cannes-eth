@@ -1,9 +1,9 @@
-const { Terra } = require('terra-api');
+const { TerraClient } = require('terra-api');
 const logger = require('../config/logger');
 
 class TerraService {
   constructor() {
-    this.terra = new Terra(
+    this.terra = new TerraClient(
       process.env.TERRA_API_KEY,
       process.env.TERRA_DEV_ID
     );
@@ -35,7 +35,7 @@ class TerraService {
   generateSignature(body) {
     const crypto = require('crypto');
     const secret = process.env.TERRA_WEBHOOK_SECRET;
-    
+
     if (!secret) {
       logger.warn('TERRA_WEBHOOK_SECRET not configured');
       return '';
@@ -56,14 +56,14 @@ class TerraService {
     try {
       logger.info('Fetching user data from Terra', { userId });
 
-      const response = await this.terra.getUser(userId);
-      
+      const response = await this.terra.user.getUser(userId);
+
       logger.info('Successfully fetched user data', { userId });
       return response;
     } catch (error) {
-      logger.error('Error fetching user data from Terra', { 
-        userId, 
-        error: error.message 
+      logger.error('Error fetching user data from Terra', {
+        userId,
+        error: error.message,
       });
       throw error;
     }
@@ -78,28 +78,28 @@ class TerraService {
    */
   async getSleepData(userId, startDate, endDate) {
     try {
-      logger.info('Fetching sleep data from Terra', { 
-        userId, 
-        startDate, 
-        endDate 
+      logger.info('Fetching sleep data from Terra', {
+        userId,
+        startDate,
+        endDate,
       });
 
-      const response = await this.terra.getSleep({
+      const response = await this.terra.sleep.getSleep({
         user_id: userId,
         start_date: startDate,
-        end_date: endDate
+        end_date: endDate,
       });
 
-      logger.info('Successfully fetched sleep data', { 
-        userId, 
-        dataCount: response.data?.length || 0 
+      logger.info('Successfully fetched sleep data', {
+        userId,
+        dataCount: response.data?.length || 0,
       });
 
       return response;
     } catch (error) {
-      logger.error('Error fetching sleep data from Terra', { 
-        userId, 
-        error: error.message 
+      logger.error('Error fetching sleep data from Terra', {
+        userId,
+        error: error.message,
       });
       throw error;
     }
@@ -114,18 +114,18 @@ class TerraService {
     try {
       logger.info('Fetching available data types from Terra', { userId });
 
-      const response = await this.terra.getAvailableDataTypes(userId);
-      
-      logger.info('Successfully fetched available data types', { 
-        userId, 
-        types: response 
+      const response = await this.terra.user.getAvailableDataTypes(userId);
+
+      logger.info('Successfully fetched available data types', {
+        userId,
+        types: response,
       });
 
       return response;
     } catch (error) {
-      logger.error('Error fetching available data types from Terra', { 
-        userId, 
-        error: error.message 
+      logger.error('Error fetching available data types from Terra', {
+        userId,
+        error: error.message,
       });
       throw error;
     }
@@ -140,36 +140,14 @@ class TerraService {
     try {
       logger.info('Deauthorizing user from Terra', { userId });
 
-      const response = await this.terra.deauthorizeUser(userId);
-      
+      const response = await this.terra.user.deauthorizeUser(userId);
+
       logger.info('Successfully deauthorized user', { userId });
       return response;
     } catch (error) {
-      logger.error('Error deauthorizing user from Terra', { 
-        userId, 
-        error: error.message 
-      });
-      throw error;
-    }
-  }
-
-  /**
-   * Get webhook status
-   * @param {string} userId - Terra user ID
-   * @returns {Object} Webhook status
-   */
-  async getWebhookStatus(userId) {
-    try {
-      logger.info('Fetching webhook status from Terra', { userId });
-
-      const response = await this.terra.getWebhookStatus(userId);
-      
-      logger.info('Successfully fetched webhook status', { userId });
-      return response;
-    } catch (error) {
-      logger.error('Error fetching webhook status from Terra', { 
-        userId, 
-        error: error.message 
+      logger.error('Error deauthorizing user from Terra', {
+        userId,
+        error: error.message,
       });
       throw error;
     }
@@ -186,18 +164,18 @@ class TerraService {
     try {
       logger.info('Generating Terra auth URL', { referenceId, resources });
 
-      const authUrl = this.terra.generateAuthUrl({
+      const authUrl = this.terra.authentication.generateAuthUrl({
         reference_id: referenceId,
-        resources: resources,
-        redirect_url: redirectUrl
+        resources,
+        redirect_url: redirectUrl,
       });
 
       logger.info('Successfully generated auth URL', { referenceId });
       return authUrl;
     } catch (error) {
-      logger.error('Error generating Terra auth URL', { 
-        referenceId, 
-        error: error.message 
+      logger.error('Error generating Terra auth URL', {
+        referenceId,
+        error: error.message,
       });
       throw error;
     }
@@ -212,17 +190,18 @@ class TerraService {
     try {
       logger.info('Exchanging auth code for user token');
 
-      const response = await this.terra.exchangeAuthCode(authCode);
-      
+      const response =
+        await this.terra.authentication.exchangeAuthCode(authCode);
+
       logger.info('Successfully exchanged auth code for token');
       return response;
     } catch (error) {
-      logger.error('Error exchanging auth code for token', { 
-        error: error.message 
+      logger.error('Error exchanging auth code for token', {
+        error: error.message,
       });
       throw error;
     }
   }
 }
 
-module.exports = TerraService; 
+module.exports = TerraService;

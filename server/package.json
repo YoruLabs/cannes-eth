@@ -1,34 +1,33 @@
 {
-  "name": "terra-sleep-server",
+  "name": "terra-webhook-server",
   "version": "1.0.0",
-  "description": "Server to handle Terra sleep data webhooks and process health metrics",
+  "description": "Terra sleep data webhook server with Supabase integration",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "test": "node test-webhook.js",
     "test:webhook": "node test-webhook.js",
-    "test:healthcheck": "node test-healthcheck.js"
+    "test:supabase": "node test-supabase-integration.js",
+    "lint": "eslint src/ --ext .js",
+    "lint:fix": "eslint src/ --ext .js --fix",
+    "format": "prettier --write src/",
+    "format:check": "prettier --check src/"
   },
-  "keywords": [
-    "terra",
-    "sleep",
-    "health",
-    "webhook",
-    "fastify"
-  ],
+  "keywords": ["terra", "webhook", "sleep", "health", "supabase", "fastify"],
   "author": "",
   "license": "MIT",
   "dependencies": {
     "@supabase/supabase-js": "^2.38.4",
-    "axios": "^1.6.2",
-    "dotenv": "^16.3.1",
     "fastify": "^4.24.3",
-    "terra-api": "^2.0.4",
     "winston": "^3.11.0",
-    "zod": "^3.22.4"
+    "zod": "^3.22.4",
+    "terra-api": "^1.0.0"
   },
   "devDependencies": {
-    "nodemon": "^3.0.2"
+    "nodemon": "^3.0.2",
+    "eslint": "^8.55.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-prettier": "^5.0.1",
+    "prettier": "^3.1.1"
   }
 }
