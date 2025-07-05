@@ -16,9 +16,21 @@ class SupabaseService {
    */
   async storeSleepMetrics(sleepMetrics) {
     try {
-      logger.info('Storing sleep metrics in Supabase', { 
+      logger.info('Storing sleep metrics in Supabase', {
         userId: sleepMetrics.user_id,
-        sessionId: sleepMetrics.session_id 
+        sessionId: sleepMetrics.session_id,
+      });
+
+      // Log the exact payload for debugging
+      logger.info('Sleep metrics payload:', {
+        payload: JSON.stringify(sleepMetrics, null, 2),
+        payloadKeys: Object.keys(sleepMetrics),
+        payloadTypes: Object.fromEntries(
+          Object.entries(sleepMetrics).map(([key, value]) => [
+            key,
+            typeof value,
+          ])
+        ),
       });
 
       const { data, error } = await this.supabase
@@ -32,16 +44,16 @@ class SupabaseService {
         throw new Error(`Failed to store sleep metrics: ${error.message}`);
       }
 
-      logger.info('Successfully stored sleep metrics', { 
+      logger.info('Successfully stored sleep metrics', {
         id: data.id,
-        userId: data.user_id 
+        userId: data.user_id,
       });
 
       return data;
     } catch (error) {
-      logger.error('Error in storeSleepMetrics', { 
+      logger.error('Error in storeSleepMetrics', {
         error: error.message,
-        stack: error.stack 
+        stack: error.stack,
       });
       throw error;
     }
@@ -69,16 +81,16 @@ class SupabaseService {
         throw new Error(`Failed to fetch sleep metrics: ${error.message}`);
       }
 
-      logger.info('Successfully fetched sleep metrics', { 
-        userId, 
-        count: data.length 
+      logger.info('Successfully fetched sleep metrics', {
+        userId,
+        count: data.length,
       });
 
       return data;
     } catch (error) {
-      logger.error('Error in getUserSleepMetrics', { 
+      logger.error('Error in getUserSleepMetrics', {
         error: error.message,
-        stack: error.stack 
+        stack: error.stack,
       });
       throw error;
     }
@@ -98,7 +110,10 @@ class SupabaseService {
         .from('sleep_metrics')
         .select('*')
         .in('user_id', userIds)
-        .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()) // Last 7 days
+        .gte(
+          'created_at',
+          new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+        ) // Last 7 days
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -106,16 +121,16 @@ class SupabaseService {
         throw new Error(`Failed to fetch challenge metrics: ${error.message}`);
       }
 
-      logger.info('Successfully fetched challenge sleep metrics', { 
-        challengeId, 
-        count: data.length 
+      logger.info('Successfully fetched challenge sleep metrics', {
+        challengeId,
+        count: data.length,
       });
 
       return data;
     } catch (error) {
-      logger.error('Error in getChallengeSleepMetrics', { 
+      logger.error('Error in getChallengeSleepMetrics', {
         error: error.message,
-        stack: error.stack 
+        stack: error.stack,
       });
       throw error;
     }
@@ -134,7 +149,10 @@ class SupabaseService {
       const { data, error } = await this.supabase
         .from('sleep_metrics')
         .select('user_id, session_id, sleep_efficiency, created_at')
-        .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()) // Last 30 days
+        .gte(
+          'created_at',
+          new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+        ) // Last 30 days
         .order(metric, { ascending: false })
         .limit(limit);
 
@@ -143,16 +161,16 @@ class SupabaseService {
         throw new Error(`Failed to fetch leaderboard: ${error.message}`);
       }
 
-      logger.info('Successfully fetched sleep leaderboard', { 
-        metric, 
-        count: data.length 
+      logger.info('Successfully fetched sleep leaderboard', {
+        metric,
+        count: data.length,
       });
 
       return data;
     } catch (error) {
-      logger.error('Error in getSleepLeaderboard', { 
+      logger.error('Error in getSleepLeaderboard', {
         error: error.message,
-        stack: error.stack 
+        stack: error.stack,
       });
       throw error;
     }
@@ -171,16 +189,19 @@ class SupabaseService {
         .eq('id', userId)
         .single();
 
-      if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
+      if (error && error.code !== 'PGRST116') {
+        // PGRST116 is "not found"
         logger.error('Error checking if connection exists', { error });
-        throw new Error(`Failed to check connection existence: ${error.message}`);
+        throw new Error(
+          `Failed to check connection existence: ${error.message}`
+        );
       }
 
       return !!data;
     } catch (error) {
-      logger.error('Error in connectionExists', { 
+      logger.error('Error in connectionExists', {
         error: error.message,
-        stack: error.stack 
+        stack: error.stack,
       });
       throw error;
     }
@@ -197,15 +218,20 @@ class SupabaseService {
 
       const { data, error } = await this.supabase
         .from('connections')
-        .upsert([{
-          id: userData.user_id,
-          provider: userData.provider,
-          reference_id: userData.reference_id,
-          active: userData.active,
-          last_webhook_update: new Date().toISOString()
-        }], {
-          onConflict: 'id'
-        })
+        .upsert(
+          [
+            {
+              id: userData.user_id,
+              provider: userData.provider,
+              reference_id: userData.reference_id,
+              active: userData.active,
+              last_webhook_update: new Date().toISOString(),
+            },
+          ],
+          {
+            onConflict: 'id',
+          }
+        )
         .select()
         .single();
 
@@ -218,9 +244,9 @@ class SupabaseService {
 
       return data;
     } catch (error) {
-      logger.error('Error in upsertConnection', { 
+      logger.error('Error in upsertConnection', {
         error: error.message,
-        stack: error.stack 
+        stack: error.stack,
       });
       throw error;
     }
@@ -246,9 +272,9 @@ class SupabaseService {
 
       return data;
     } catch (error) {
-      logger.error('Error in getConnectionByUserId', { 
+      logger.error('Error in getConnectionByUserId', {
         error: error.message,
-        stack: error.stack 
+        stack: error.stack,
       });
       throw error;
     }
@@ -274,16 +300,16 @@ class SupabaseService {
         throw new Error(`Failed to fetch connections: ${error.message}`);
       }
 
-      logger.info('Successfully fetched connections', { 
-        walletAddress, 
-        count: data.length 
+      logger.info('Successfully fetched connections', {
+        walletAddress,
+        count: data.length,
       });
 
       return data;
     } catch (error) {
-      logger.error('Error in getConnectionsByWalletAddress', { 
+      logger.error('Error in getConnectionsByWalletAddress', {
         error: error.message,
-        stack: error.stack 
+        stack: error.stack,
       });
       throw error;
     }
@@ -297,9 +323,9 @@ class SupabaseService {
    */
   async getConnectionByWalletAndProvider(walletAddress, provider) {
     try {
-      logger.info('Fetching connection by wallet and provider', { 
-        walletAddress, 
-        provider 
+      logger.info('Fetching connection by wallet and provider', {
+        walletAddress,
+        provider,
       });
 
       const { data, error } = await this.supabase
@@ -309,33 +335,36 @@ class SupabaseService {
         .eq('provider', provider)
         .single();
 
-      if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
-        logger.error('Error fetching connection by wallet and provider', { error });
+      if (error && error.code !== 'PGRST116') {
+        // PGRST116 is "not found"
+        logger.error('Error fetching connection by wallet and provider', {
+          error,
+        });
         throw new Error(`Failed to fetch connection: ${error.message}`);
       }
 
       if (data) {
-        logger.info('Successfully fetched connection', { 
-          walletAddress, 
-          provider, 
-          connectionId: data.id 
+        logger.info('Successfully fetched connection', {
+          walletAddress,
+          provider,
+          connectionId: data.id,
         });
       } else {
-        logger.info('No connection found for wallet and provider', { 
-          walletAddress, 
-          provider 
+        logger.info('No connection found for wallet and provider', {
+          walletAddress,
+          provider,
         });
       }
 
       return data;
     } catch (error) {
-      logger.error('Error in getConnectionByWalletAndProvider', { 
+      logger.error('Error in getConnectionByWalletAndProvider', {
         error: error.message,
-        stack: error.stack 
+        stack: error.stack,
       });
       throw error;
     }
   }
 }
 
-module.exports = SupabaseService; 
+module.exports = SupabaseService;

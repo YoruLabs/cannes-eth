@@ -8,7 +8,7 @@ const TerraUserSchema = z.object({
   scopes: z.any().nullable(),
   user_id: z.string().uuid(),
   active: z.boolean(),
-  last_webhook_update: z.string().nullable()
+  last_webhook_update: z.string().nullable(),
 });
 
 // Heart Rate Data Schemas
@@ -16,17 +16,17 @@ const HeartRateSampleSchema = z.object({
   context: z.number(),
   timestamp: z.string(),
   timer_duration_seconds: z.number().nullable(),
-  bpm: z.number()
+  bpm: z.number(),
 });
 
 const HRVSampleSchema = z.object({
   hrv_rmssd: z.number(),
-  timestamp: z.string()
+  timestamp: z.string(),
 });
 
 const HRVSdnnSampleSchema = z.object({
   hrv_sdnn: z.number(),
-  timestamp: z.string()
+  timestamp: z.string(),
 });
 
 const HeartRateSummarySchema = z.object({
@@ -36,7 +36,7 @@ const HeartRateSummarySchema = z.object({
   min_hr_bpm: z.number(),
   max_hr_bpm: z.number(),
   resting_hr_bpm: z.number(),
-  user_max_hr_bpm: z.number()
+  user_max_hr_bpm: z.number(),
 });
 
 const HeartRateDataSchema = z.object({
@@ -44,14 +44,14 @@ const HeartRateDataSchema = z.object({
   detailed: z.object({
     hrv_samples_rmssd: z.array(HRVSampleSchema),
     hr_samples: z.array(HeartRateSampleSchema),
-    hrv_samples_sdnn: z.array(HRVSdnnSampleSchema)
-  })
+    hrv_samples_sdnn: z.array(HRVSdnnSampleSchema),
+  }),
 });
 
 // Respiration Data Schemas
 const SnoringSampleSchema = z.object({
   duration_seconds: z.number(),
-  timestamp: z.string()
+  timestamp: z.string(),
 });
 
 const SnoringDataSchema = z.object({
@@ -59,25 +59,25 @@ const SnoringDataSchema = z.object({
   samples: z.array(SnoringSampleSchema),
   num_snoring_events: z.number(),
   end_time: z.string(),
-  start_time: z.string()
+  start_time: z.string(),
 });
 
 const OxygenSaturationSampleSchema = z.object({
   percentage: z.number(),
   type: z.number(),
-  timestamp: z.string()
+  timestamp: z.string(),
 });
 
 const OxygenSaturationDataSchema = z.object({
   samples: z.array(OxygenSaturationSampleSchema),
   avg_saturation_percentage: z.number(),
   end_time: z.string(),
-  start_time: z.string()
+  start_time: z.string(),
 });
 
 const BreathSampleSchema = z.object({
   breaths_per_min: z.number(),
-  timestamp: z.string()
+  timestamp: z.string(),
 });
 
 const BreathsDataSchema = z.object({
@@ -87,19 +87,19 @@ const BreathsDataSchema = z.object({
   max_breaths_per_min: z.number(),
   end_time: z.string(),
   min_breaths_per_min: z.number(),
-  start_time: z.string()
+  start_time: z.string(),
 });
 
 const RespirationDataSchema = z.object({
   snoring_data: SnoringDataSchema,
   oxygen_saturation_data: OxygenSaturationDataSchema,
-  breaths_data: BreathsDataSchema
+  breaths_data: BreathsDataSchema,
 });
 
 // Sleep Durations Data Schemas
 const HypnogramSampleSchema = z.object({
   level: z.number(),
-  timestamp: z.string()
+  timestamp: z.string(),
 });
 
 const AsleepDataSchema = z.object({
@@ -107,7 +107,7 @@ const AsleepDataSchema = z.object({
   duration_asleep_state_seconds: z.number(),
   duration_REM_sleep_state_seconds: z.number(),
   duration_deep_sleep_state_seconds: z.number(),
-  duration_light_sleep_state_seconds: z.number()
+  duration_light_sleep_state_seconds: z.number(),
 });
 
 const AwakeDataSchema = z.object({
@@ -117,12 +117,12 @@ const AwakeDataSchema = z.object({
   duration_long_interruption_seconds: z.number(),
   duration_awake_state_seconds: z.number(),
   wake_up_latency_seconds: z.number(),
-  num_out_of_bed_events: z.number()
+  num_out_of_bed_events: z.number(),
 });
 
 const OtherDataSchema = z.object({
   duration_unmeasurable_sleep_seconds: z.number(),
-  duration_in_bed_seconds: z.number()
+  duration_in_bed_seconds: z.number(),
 });
 
 const SleepDurationsDataSchema = z.object({
@@ -130,7 +130,7 @@ const SleepDurationsDataSchema = z.object({
   hypnogram_samples: z.array(HypnogramSampleSchema),
   asleep: AsleepDataSchema,
   awake: AwakeDataSchema,
-  other: OtherDataSchema
+  other: OtherDataSchema,
 });
 
 // Metadata Schema
@@ -140,7 +140,7 @@ const MetadataSchema = z.object({
   is_nap: z.boolean(),
   end_time: z.string(),
   upload_type: z.number(),
-  start_time: z.string()
+  start_time: z.string(),
 });
 
 // Complete Terra Sleep Data Schema
@@ -148,11 +148,11 @@ const TerraSleepDataSchema = z.object({
   heart_rate_data: HeartRateDataSchema,
   readiness_data: z.object({
     readiness: z.number(),
-    recovery_level: z.number()
+    recovery_level: z.number(),
   }),
   metadata: MetadataSchema,
   scores: z.object({
-    sleep: z.number().nullable()
+    sleep: z.number().nullable(),
   }),
   respiration_data: RespirationDataSchema,
   sleep_durations_data: SleepDurationsDataSchema,
@@ -165,15 +165,15 @@ const TerraSleepDataSchema = z.object({
     last_upload_date: z.string().nullable(),
     other_devices: z.array(z.any()),
     hardware_version: z.string().nullable(),
-    data_provided: z.array(z.any())
+    data_provided: z.array(z.any()),
   }),
   data_enrichment: z.object({
     sleep_contributors: z.any().nullable(),
-    sleep_score: z.number().nullable()
+    sleep_score: z.number().nullable(),
   }),
   temperature_data: z.object({
-    delta: z.number()
-  })
+    delta: z.number(),
+  }),
 });
 
 // Terra Healthcheck Schema
@@ -183,20 +183,20 @@ const TerraHealthcheckSchema = z.object({
   status: z.string(),
   trend_percentage: z.number(),
   type: z.literal('healthcheck'),
-  version: z.string()
+  version: z.string(),
 });
 
 // Terra Webhook Payload Schema
 const TerraWebhookSchema = z.object({
   user: TerraUserSchema,
   data: z.array(TerraSleepDataSchema),
-  type: z.literal('sleep')
+  type: z.literal('sleep'),
 });
 
 // Combined Terra Webhook Schema that handles both types
 const TerraWebhookCombinedSchema = z.union([
   TerraWebhookSchema,
-  TerraHealthcheckSchema
+  TerraHealthcheckSchema,
 ]);
 
 // Processed Sleep Metrics Schema (for challenge system)
@@ -224,7 +224,7 @@ const ProcessedSleepMetricsSchema = z.object({
   readiness_score: z.number(),
   recovery_level: z.number(),
   sleep_score: z.number().nullable(),
-  created_at: z.string()
+  created_at: z.string(),
 });
 
 module.exports = {
@@ -232,5 +232,5 @@ module.exports = {
   TerraHealthcheckSchema,
   TerraWebhookCombinedSchema,
   ProcessedSleepMetricsSchema,
-  TerraSleepDataSchema
-}; 
+  TerraSleepDataSchema,
+};

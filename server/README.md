@@ -1,154 +1,86 @@
 # Terra Sleep Data Server
 
-A Fastify-based server for handling Terra sleep data webhooks and processing health metrics for challenge systems.
+A Fastify-based server for processing Terra sleep data webhooks and storing health metrics in Supabase for challenge-based competitions.
 
 ## Features
 
-- **Terra Webhook Integration**: Receives and validates sleep data from Terra API
-- **Data Processing**: Consolidates relevant sleep metrics (heart rate, respiration, sleep stages, etc.)
-- **Challenge System Ready**: Calculates competition-ready metrics and scores
-- **Supabase Integration**: Stores processed data for challenge comparisons
-- **Comprehensive Logging**: Winston-based structured logging
+- **Real-time Health Data Processing**: Receive and process Terra webhooks for sleep, activity, and body data
+- **Supabase Integration**: Store processed metrics in PostgreSQL database
+- **Challenge System Support**: Calculate sleep quality, recovery, and efficiency scores
+- **Webhook Subscription Management**: Subscribe/unsubscribe to real-time data streams
+- **Multi-provider Support**: Oura, Whoop, Fitbit, and other Terra-supported providers
 - **Data Validation**: Zod schemas for payload validation
-- **Auto-restart**: Nodemon for development
+- **Comprehensive Logging**: Winston-based logging with structured output
 
-## Prerequisites
+## Quick Start
+
+### Prerequisites
 
 - Node.js 18+
-- Terra API account and credentials
-- Supabase project with database
+- Supabase project with PostgreSQL database
+- Terra API credentials
 
-## Installation
-
-1. **Clone and navigate to server directory:**
-
-   ```bash
-   cd server
-   ```
-
-2. **Install dependencies:**
-
-   ```bash
-   npm install
-   ```
-
-3. **Set up environment variables:**
-
-   ```bash
-   cp env.example .env
-   ```
-
-   Fill in your environment variables:
-
-   ```env
-   # Terra API Configuration
-   TERRA_API_KEY=your_terra_api_key_here
-   TERRA_WEBHOOK_SECRET=your_terra_webhook_secret_here
-   TERRA_DEV_ID=your_terra_dev_id_here
-
-   # Supabase Configuration
-   SUPABASE_URL=your_supabase_url_here
-   SUPABASE_ANON_KEY=your_supabase_anon_key_here
-   SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key_here
-
-   # Server Configuration
-   PORT=3001
-   NODE_ENV=development
-
-   # Logging
-   LOG_LEVEL=info
-   ```
-
-4. **Create logs directory:**
-   ```bash
-   mkdir logs
-   ```
-
-## Database Setup
-
-Create the following tables in your Supabase database:
-
-### Connections Table
-
-```sql
-CREATE TABLE connections (
-  id UUID PRIMARY KEY,
-  provider TEXT NOT NULL,
-  reference_id TEXT,
-  active BOOLEAN DEFAULT true,
-  last_webhook_update TIMESTAMP WITH TIME ZONE,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-```
-
-### Sleep Metrics Table
-
-```sql
-CREATE TABLE sleep_metrics (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id UUID REFERENCES users(id),
-  session_id TEXT UNIQUE NOT NULL,
-  start_time TIMESTAMP WITH TIME ZONE NOT NULL,
-  end_time TIMESTAMP WITH TIME ZONE NOT NULL,
-  total_sleep_duration_seconds INTEGER NOT NULL,
-  sleep_efficiency DECIMAL(5,2) NOT NULL,
-  deep_sleep_duration_seconds INTEGER NOT NULL,
-  light_sleep_duration_seconds INTEGER NOT NULL,
-  rem_sleep_duration_seconds INTEGER NOT NULL,
-  awake_duration_seconds INTEGER NOT NULL,
-  sleep_latency_seconds INTEGER NOT NULL,
-  wake_up_latency_seconds INTEGER NOT NULL,
-  avg_heart_rate_bpm INTEGER NOT NULL,
-  resting_heart_rate_bpm INTEGER NOT NULL,
-  avg_hrv_rmssd INTEGER NOT NULL,
-  avg_hrv_sdnn INTEGER NOT NULL,
-  avg_oxygen_saturation INTEGER NOT NULL,
-  avg_breathing_rate INTEGER NOT NULL,
-  snoring_duration_seconds INTEGER NOT NULL,
-  temperature_delta DECIMAL(10,6) NOT NULL,
-  readiness_score INTEGER NOT NULL,
-  recovery_level INTEGER NOT NULL,
-  sleep_score INTEGER,
-  sleep_quality_score DECIMAL(5,2),
-  recovery_score DECIMAL(5,2),
-  efficiency_score DECIMAL(5,2),
-  health_score DECIMAL(5,2),
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- Create indexes for better performance
-CREATE INDEX idx_connections_user_id ON sleep_metrics(user_id);
-CREATE INDEX idx_sleep_metrics_created_at ON sleep_metrics(created_at);
-CREATE INDEX idx_sleep_metrics_session_id ON sleep_metrics(session_id);
-```
-
-## Running the Server
-
-### Development Mode (with auto-restart)
+### Installation
 
 ```bash
+npm install
+```
+
+### Environment Variables
+
+Create a `.env` file in the server directory:
+
+```env
+# Server Configuration
+PORT=3001
+NODE_ENV=development
+
+# Terra API Configuration
+TERRA_API_KEY=your_terra_api_key
+TERRA_DEV_ID=your_terra_dev_id
+TERRA_WEBHOOK_SECRET=your_webhook_secret
+
+# Supabase Configuration
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+
+# Logging
+LOG_LEVEL=info
+```
+
+### Database Setup
+
+Run the migration to create the required tables:
+
+```sql
+-- Run this in your Supabase SQL editor
+-- See: migrations/rename_users_to_connections.sql
+```
+
+### Start the Server
+
+```bash
+# Development mode with auto-restart
 npm run dev
-```
 
-### Production Mode
-
-```bash
+# Production mode
 npm start
 ```
 
-The server will start on port 3001 (or the port specified in your .env file).
-
 ## API Endpoints
 
-### 1. Terra Webhook
+### Webhook Endpoints
 
-**POST** `/webhook/terra`
+#### `POST /webhook/terra`
 
-Receives sleep data from Terra webhooks.
+Receive Terra webhook data for processing.
 
-**Request Body:** Terra sleep data payload
-**Response:**
+**Supported webhook types:**
+
+- `sleep`: Sleep data from health devices
+- `healthcheck`: Terra service health checks
+
+**Example response:**
 
 ```json
 {
@@ -161,9 +93,9 @@ Receives sleep data from Terra webhooks.
       "success": true,
       "storedId": "uuid",
       "metrics": {
-        "sleepEfficiency": 85.5,
-        "sleepQualityScore": 78.2,
-        "recoveryScore": 82.1,
+        "sleepEfficiency": 85,
+        "sleepQualityScore": 78.5,
+        "recoveryScore": 92.3,
         "totalSleepDuration": 28800
       }
     }
@@ -171,200 +103,281 @@ Receives sleep data from Terra webhooks.
 }
 ```
 
-### 2. Health Check
+### Webhook Subscription Management
 
-**GET** `/health`
+#### `POST /webhook/subscribe`
 
-Returns server health status.
+Subscribe to real-time health data updates.
 
-**Response:**
-
-```json
-{
-  "status": "healthy",
-  "timestamp": "2024-01-15T10:30:00.000Z",
-  "service": "terra-sleep-server"
-}
-```
-
-### 3. User Metrics
-
-**GET** `/users/:userId/metrics?limit=10`
-
-Get sleep metrics for a specific user.
-
-**Parameters:**
-
-- `userId` (path): User UUID
-- `limit` (query): Number of records to return (default: 10)
-
-**Response:**
+**Request body:**
 
 ```json
 {
-  "success": true,
-  "data": [...],
-  "count": 5
+  "userId": "terra-user-id",
+  "webhookUrl": "https://your-server.com/webhook/terra",
+  "events": ["sleep", "activity", "body"]
 }
 ```
 
-### 4. Leaderboard
+#### `POST /webhook/unsubscribe`
 
-**GET** `/leaderboard?metric=sleep_efficiency&limit=10`
+Unsubscribe from webhook updates.
 
-Get sleep leaderboard data.
-
-**Parameters:**
-
-- `metric` (query): Metric to rank by (default: sleep_efficiency)
-- `limit` (query): Number of top performers (default: 10)
-
-**Response:**
+**Request body:**
 
 ```json
 {
-  "success": true,
-  "data": [...],
-  "metric": "sleep_efficiency",
-  "count": 10
+  "userId": "terra-user-id",
+  "webhookId": "webhook-subscription-id"
 }
 ```
 
-## Processed Sleep Metrics
+#### `GET /webhook/subscriptions/:userId`
 
-The server processes and stores the following consolidated metrics:
+List all webhook subscriptions for a user.
 
-### Core Sleep Metrics
+#### `PUT /webhook/subscriptions/:userId`
 
-- **Total Sleep Duration**: Total time spent sleeping
-- **Sleep Efficiency**: Percentage of time in bed actually spent sleeping
-- **Deep Sleep Duration**: Time spent in deep sleep
-- **Light Sleep Duration**: Time spent in light sleep
-- **REM Sleep Duration**: Time spent in REM sleep
-- **Awake Duration**: Time spent awake during sleep session
+Update webhook subscription settings.
 
-### Heart Rate Metrics
+**Request body:**
 
-- **Average Heart Rate**: Mean BPM during sleep
-- **Resting Heart Rate**: Resting heart rate
-- **HRV RMSSD**: Heart rate variability (RMSSD)
-- **HRV SDNN**: Heart rate variability (SDNN)
+```json
+{
+  "webhookId": "webhook-subscription-id",
+  "events": ["sleep", "activity"],
+  "webhookUrl": "https://new-url.com/webhook/terra"
+}
+```
 
-### Respiration Metrics
+#### `POST /webhook/streaming/enable`
 
-- **Average Oxygen Saturation**: Mean SpO2 percentage
-- **Average Breathing Rate**: Mean breaths per minute
-- **Snoring Duration**: Total time spent snoring
+Enable real-time data streaming for all available data types.
 
-### Challenge Scores
+**Request body:**
 
-- **Sleep Quality Score**: Composite score based on multiple factors
-- **Recovery Score**: Based on HRV and readiness
+```json
+{
+  "userId": "terra-user-id",
+  "webhookUrl": "https://your-server.com/webhook/terra"
+}
+```
+
+#### `POST /webhook/streaming/disable`
+
+Disable real-time data streaming for a user.
+
+**Request body:**
+
+```json
+{
+  "userId": "terra-user-id"
+}
+```
+
+#### `GET /webhook/status/:userId`
+
+Get webhook status for a user.
+
+### Health Check
+
+#### `GET /webhook/health`
+
+Server health check endpoint.
+
+## Testing
+
+### Test Supabase Integration
+
+```bash
+npm run test:supabase
+```
+
+This test:
+
+- Verifies Supabase connection
+- Creates test connection and sleep metrics
+- Validates data storage and retrieval
+- Cleans up test data
+
+### Test Webhook Subscriptions
+
+```bash
+npm run test:webhook
+```
+
+This test:
+
+- Sets up webhook subscriptions
+- Tests subscription management endpoints
+- Validates real-time streaming setup
+- Cleans up test data
+
+## Real-time Health Data Setup
+
+### 1. Enable Webhook Subscriptions
+
+To receive real-time health data updates from Terra:
+
+```javascript
+// Subscribe to sleep data
+const response = await fetch("http://localhost:3001/webhook/subscribe", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    userId: "terra-user-id",
+    webhookUrl: "https://your-server.com/webhook/terra",
+    events: ["sleep", "activity", "body"],
+  }),
+});
+```
+
+### 2. Enable Real-time Streaming
+
+For automatic subscription to all available data types:
+
+```javascript
+// Enable real-time streaming
+const response = await fetch("http://localhost:3001/webhook/streaming/enable", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    userId: "terra-user-id",
+    webhookUrl: "https://your-server.com/webhook/terra",
+  }),
+});
+```
+
+### 3. Monitor Incoming Data
+
+Once subscribed, Terra will send webhooks to your endpoint whenever new health data is available. Monitor your server logs to see incoming data:
+
+```bash
+# Watch server logs
+tail -f logs/app.log
+```
+
+## Database Schema
+
+### Connections Table
+
+Stores Terra provider connections for World miniapp users.
+
+```sql
+CREATE TABLE connections (
+  id UUID PRIMARY KEY,                    -- Terra user ID
+  provider TEXT NOT NULL,                 -- Provider name (Oura, Whoop, etc.)
+  reference_id TEXT NOT NULL,             -- World miniapp wallet address
+  active BOOLEAN DEFAULT true,
+  last_webhook_update TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+```
+
+### Sleep Metrics Table
+
+Stores processed sleep data with challenge-ready metrics.
+
+```sql
+CREATE TABLE sleep_metrics (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES connections(id),
+  session_id TEXT NOT NULL,
+  start_time TIMESTAMP WITH TIME ZONE,
+  end_time TIMESTAMP WITH TIME ZONE,
+  total_sleep_duration_seconds INTEGER,
+  sleep_efficiency INTEGER,
+  deep_sleep_duration_seconds INTEGER,
+  light_sleep_duration_seconds INTEGER,
+  rem_sleep_duration_seconds INTEGER,
+  awake_duration_seconds INTEGER,
+  sleep_latency_seconds INTEGER,
+  wake_up_latency_seconds INTEGER,
+  avg_heart_rate_bpm INTEGER,
+  resting_heart_rate_bpm INTEGER,
+  avg_hrv_rmssd INTEGER,
+  avg_hrv_sdnn INTEGER,
+  avg_oxygen_saturation INTEGER,
+  avg_breathing_rate INTEGER,
+  snoring_duration_seconds INTEGER,
+  temperature_delta NUMERIC,
+  readiness_score INTEGER,
+  recovery_level INTEGER,
+  sleep_score INTEGER,
+  sleep_quality_score NUMERIC,
+  recovery_score NUMERIC,
+  efficiency_score NUMERIC,
+  health_score NUMERIC,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+```
+
+## Challenge System
+
+The server calculates several challenge-ready metrics:
+
+- **Sleep Quality Score**: Overall sleep quality (0-100)
+- **Recovery Score**: Recovery readiness based on HRV and readiness data
 - **Efficiency Score**: Sleep efficiency percentage
-- **Health Score**: Overall health indicators
+- **Health Score**: Overall health indicator
 
-## Terra Webhook Setup
+These metrics are automatically calculated and stored with each sleep session for challenge comparisons.
 
-1. **Configure Terra Webhook URL:**
+## Troubleshooting
 
-   - URL: `https://your-domain.com/webhook/terra`
-   - Method: POST
-   - Content-Type: application/json
+### Common Issues
 
-2. **Set up webhook events:**
+1. **"fetch failed" errors**: Check Supabase URL and service role key
+2. **Foreign key constraint errors**: Ensure connection exists before inserting sleep metrics
+3. **Webhook subscription failures**: Verify Terra API credentials and webhook URL accessibility
 
-   - Enable "sleep" data type
-   - Configure retry settings as needed
+### Logs
 
-3. **Test webhook:**
-   Use the sample payload provided in the main README to test the endpoint.
+Check the logs directory for detailed error information:
 
-## Logging
+```bash
+# View recent logs
+tail -f logs/app.log
 
-Logs are stored in the `logs/` directory:
-
-- `combined.log`: All log levels
-- `error.log`: Error-level logs only
-
-Log format includes:
-
-- Timestamp
-- Log level
-- Service name
-- Structured data
-- Error stack traces (when applicable)
-
-## Error Handling
-
-The server includes comprehensive error handling:
-
-- Input validation with Zod schemas
-- Database error handling
-- Graceful shutdown on SIGTERM/SIGINT
-- Uncaught exception handling
-- Structured error responses
+# Search for specific errors
+grep "ERROR" logs/app.log
+```
 
 ## Development
 
-### File Structure
+### Project Structure
 
 ```
 server/
 ├── src/
 │   ├── config/
 │   │   └── logger.js
+│   ├── handlers/
+│   │   └── webhookHandler.js
 │   ├── routes/
 │   │   └── webhook.js
 │   ├── schemas/
 │   │   └── sleepData.js
 │   ├── services/
 │   │   ├── sleepDataProcessor.js
-│   │   └── supabaseService.js
+│   │   ├── supabaseService.js
+│   │   └── terraService.js
 │   └── index.js
+├── migrations/
+│   └── rename_users_to_connections.sql
+├── tests/
 ├── logs/
-├── package.json
-├── nodemon.json
-├── env.example
-└── README.md
+└── package.json
 ```
 
-### Adding New Metrics
+### Adding New Data Types
 
-1. Update the Zod schemas in `src/schemas/sleepData.js`
+1. Update Zod schemas in `src/schemas/sleepData.js`
 2. Add processing logic in `src/services/sleepDataProcessor.js`
-3. Update the database schema if needed
-4. Add validation and error handling
-
-## Challenge System Integration
-
-The processed metrics are designed for challenge systems:
-
-1. **Competition Metrics**: Pre-calculated scores for fair comparison
-2. **User Tracking**: Session-based tracking for individual progress
-3. **Leaderboards**: Ready-to-use leaderboard endpoints
-4. **Historical Data**: Time-series data for trend analysis
-
-## Security Considerations
-
-- Validate all incoming webhook data
-- Use environment variables for sensitive data
-- Implement rate limiting for production
-- Monitor logs for suspicious activity
-- Use HTTPS in production
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Webhook validation fails**: Check Terra payload format and Zod schemas
-2. **Database connection errors**: Verify Supabase credentials and network
-3. **Port already in use**: Change PORT in .env file
-4. **Missing environment variables**: Ensure all required vars are set
-
-### Debug Mode
-
-Set `LOG_LEVEL=debug` in your .env file for detailed logging.
+3. Update database schema if needed
+4. Add webhook subscription for new data type
 
 ## License
 
-MIT License
+MIT
